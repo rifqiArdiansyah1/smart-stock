@@ -1,21 +1,29 @@
 /**
- * SmartStock — Database Client (Prisma)
+ * SmartStock — Prisma Client Singleton
  *
- * Singleton Prisma client untuk mencegah multiple instances
+ * Menggunakan pattern singleton untuk mencegah multiple instances
  * saat hot-reload di development (Next.js).
- *
- * TODO (ISSUE-002): Install Prisma dan ganti placeholder ini:
- *   npm install prisma @prisma/client
- *   npx prisma init
  *
  * @see https://www.prisma.io/docs/guides/database/troubleshooting-orm/help-articles/nextjs-prisma-client-dev-practices
  */
 
-// Placeholder type — akan diganti dengan PrismaClient setelah ISSUE-002
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type DbClient = any;
+import { PrismaClient } from '@prisma/client';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const db: DbClient = null;
+const globalForPrisma = globalThis as unknown as {
+  prisma: PrismaClient | undefined;
+};
+
+export const db =
+  globalForPrisma.prisma ??
+  new PrismaClient({
+    log:
+      process.env.NODE_ENV === 'development'
+        ? ['query', 'error', 'warn']
+        : ['error'],
+  });
+
+if (process.env.NODE_ENV !== 'production') {
+  globalForPrisma.prisma = db;
+}
 
 export default db;

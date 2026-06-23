@@ -1,0 +1,296 @@
+// =============================================================
+// SmartStock — Prisma Schema
+// =============================================================
+// Arsitektur kunci:
+// - stock_movements adalah ledger APPEND-ONLY (sumber kebenaran)
+// - stock_levels adalah cache yang di-derive dari ledger
+// - audit_logs adalah APPEND-ONLY (tidak boleh ada UPDATE/DELETE)
+// - tenant_id sudah dipasang dari awal untuk kesiapan multi-tenant
+// =============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// =============================================================
+// ENUM DEFINITIONS
+// =============================================================
+
+enum UserRole {
+  OWNER
+  ADMIN
+  STAFF_GUDANG
+  KASIR
+}
+
+enum LocationType {
+  GUDANG
+  RAK
+  AREA
+  TOKO
+}
+
+enum StockMovementType {
+  SALE       // Penjualan — dari kasir/POS
+  RESTOCK    // Penambahan stok — dari supplier
+  ADJUSTMENT // Penyesuaian — dari approval opname
+  RETURN     // Retur barang — dari pelanggan
+  LOSS       // Kehilangan / kerusakan barang
+}
+
+enum OpnameStatus {
+  IN_PROGRESS      // Sedang diopname oleh staff
+  PENDING_APPROVAL // Submit, menunggu review admin/owner
+  APPROVED         // Disetujui, stok sudah diupdate
+  REJECTED         // Ditolak, perlu diopname ulang
+}
+
+enum NotificationType {
+  LOW_STOCK         // Stok mendekati batas minimum
+  EXPIRY            // Produk mendekati / melewati expiry date
+  OPNAME_SUBMITTED  // Sesi opname disubmit staff
+  OPNAME_APPROVED   // Opname disetujui
+  OPNAME_REJECTED   // Opname ditolak
+}
+
+// =============================================================
+// CORE ENTITIES
+// =============================================================
+
+/// Pengguna sistem SmartStock
+model User {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @db.VarChar(255)
+  email     String   @unique @db.VarChar(255)
+  password  String   // bcrypt hashed
+  role      UserRole @default(STAFF_GUDANG)
+  isActive  Boolean  @default(true) @map("is_active")
+
+  /// Multi-tenant: siap untuk ekspansi SaaS multi-toko
+  tenantId  String   @map("tenant_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  stockMovements      StockMovement[]
+  opnameSessions      StockOpnameSession[]
+  auditLogs           AuditLog[]
+  notifications       Notification[]
+  approvedSessions    StockOpnameSession[] @relation("ApprovedBy")
+
+  @@index([tenantId])
+  @@index([email])
+  @@map("users")
+}
+
+/// Produk / barang yang dikelola stoknya
+model Product {
+  id          String    @id @default(uuid()) @db.Uuid
+  sku         String    @unique @db.VarChar(100)
+  barcode     String    @unique @db.VarChar(100)
+  name        String    @db.VarChar(255)
+  category    String?   @db.VarChar(100)
+  description String?   @db.Text
+  minStock    Int       @default(0) @map("min_stock")
+  unit        String    @default("pcs") @db.VarChar(50) // satuan: pcs, kg, liter, dll
+  price       Decimal?  @db.Decimal(15, 2) // harga untuk kalkulasi nilai kerugian selisih
+  imageUrl    String?   @map("image_url") @db.Text
+  expiryDate  DateTime? @map("expiry_date") @db.Date
+  isActive    Boolean   @default(true) @map("is_active") // soft delete
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  stockLevels    StockLevel[]
+  stockMovements StockMovement[]
+  opnameItems    StockOpnameItem[]
+
+  @@index([sku])
+  @@index([barcode])
+  @@index([category])
+  @@index([expiryDate])
+  @@map("products")
+}
+
+/// Lokasi penyimpanan barang (gudang, rak, area)
+model Location {
+  id          String       @id @default(uuid()) @db.Uuid
+  name        String       @db.VarChar(255)
+  type        LocationType @default(GUDANG)
+  description String?      @db.Text
+  isActive    Boolean      @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  stockLevels    StockLevel[]
+  opnameSessions StockOpnameSession[]
+  stockMovements StockMovement[]
+
+  @@map("locations")
+}
+
+// =============================================================
+// STOCK (LEDGER PATTERN)
+// =============================================================
+
+/// Cache stok terkini per produk per lokasi.
+/// PENTING: Tabel ini TIDAK boleh di-update langsung melalui API.
+/// Update hanya boleh via PostgreSQL function yang dipanggil
+/// setelah INSERT ke stock_movements.
+model StockLevel {
+  id         String   @id @default(uuid()) @db.Uuid
+  productId  String   @map("product_id") @db.Uuid
+  locationId String   @map("location_id") @db.Uuid
+  quantity   Int      @default(0)
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  product  Product  @relation(fields: [productId], references: [id])
+  location Location @relation(fields: [locationId], references: [id])
+
+  @@unique([productId, locationId]) // Satu baris per produk per lokasi
+  @@index([productId])
+  @@index([locationId])
+  @@map("stock_levels")
+}
+
+/// Ledger pergerakan stok — APPEND-ONLY, sumber kebenaran.
+/// Setiap perubahan stok (jual, restock, adjustment) WAJIB
+/// melalui tabel ini. Tidak ada jalur lain yang diizinkan.
+model StockMovement {
+  id             String            @id @default(uuid()) @db.Uuid
+  productId      String            @map("product_id") @db.Uuid
+  locationId     String?           @map("location_id") @db.Uuid
+  actorId        String            @map("actor_id") @db.Uuid
+  type           StockMovementType
+  quantityChange Int               @map("quantity_change") // positif = masuk, negatif = keluar
+  quantityBefore Int               @map("quantity_before") // snapshot sebelum
+  quantityAfter  Int               @map("quantity_after")  // snapshot sesudah
+  referenceId    String?           @map("reference_id") @db.Uuid // ID opname session / transaksi
+  notes          String?           @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  product  Product   @relation(fields: [productId], references: [id])
+  location Location? @relation(fields: [locationId], references: [id])
+  actor    User      @relation(fields: [actorId], references: [id])
+
+  @@index([productId])
+  @@index([actorId])
+  @@index([locationId])
+  @@index([createdAt])
+  @@index([type])
+  @@map("stock_movements")
+}
+
+// =============================================================
+// STOCK OPNAME
+// =============================================================
+
+/// Sesi stock opname per lokasi
+model StockOpnameSession {
+  id          String       @id @default(uuid()) @db.Uuid
+  locationId  String       @map("location_id") @db.Uuid
+  startedById String       @map("started_by") @db.Uuid
+  approvedById String?     @map("approved_by") @db.Uuid
+  status      OpnameStatus @default(IN_PROGRESS)
+  reviewNotes String?      @map("review_notes") @db.Text
+
+  startedAt   DateTime  @default(now()) @map("started_at")
+  submittedAt DateTime? @map("submitted_at")
+  approvedAt  DateTime? @map("approved_at")
+
+  // Relations
+  location    Location          @relation(fields: [locationId], references: [id])
+  startedBy   User              @relation(fields: [startedById], references: [id])
+  approvedBy  User?             @relation("ApprovedBy", fields: [approvedById], references: [id])
+  items       StockOpnameItem[]
+
+  @@index([locationId])
+  @@index([startedById])
+  @@index([status])
+  @@index([startedAt])
+  @@map("stock_opname_sessions")
+}
+
+/// Item dalam sesi opname — satu baris per produk yang dihitung
+model StockOpnameItem {
+  id          String  @id @default(uuid()) @db.Uuid
+  sessionId   String  @map("session_id") @db.Uuid
+  productId   String  @map("product_id") @db.Uuid
+  systemQty   Int     @map("system_qty")   // qty dari stock_levels saat opname dimulai
+  physicalQty Int     @map("physical_qty") // qty hasil hitung fisik
+  difference  Int     // physicalQty - systemQty (positif=lebih, negatif=kurang)
+  notes       String? @db.Text
+
+  // Relations
+  session StockOpnameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  product Product            @relation(fields: [productId], references: [id])
+
+  @@unique([sessionId, productId]) // Satu produk sekali per sesi
+  @@index([sessionId])
+  @@index([productId])
+  @@map("stock_opname_items")
+}
+
+// =============================================================
+// AUDIT
+// =============================================================
+
+/// Audit trail — APPEND-ONLY, tidak boleh ada UPDATE/DELETE.
+/// Ditulis via interceptor di level aplikasi (bukan DB trigger)
+/// agar bisa menyimpan konteks user yang sedang login.
+model AuditLog {
+  id         String  @id @default(uuid()) @db.Uuid
+  actorId    String  @map("actor_id") @db.Uuid
+  action     String  @db.VarChar(100) // CREATE, UPDATE, DELETE, APPROVE, REJECT, dll
+  entityType String  @map("entity_type") @db.VarChar(100) // Product, StockOpnameSession, dll
+  entityId   String  @map("entity_id") @db.Uuid
+  oldValue   Json?   @map("old_value") // snapshot sebelum perubahan
+  newValue   Json?   @map("new_value") // snapshot sesudah perubahan
+  ipAddress  String? @map("ip_address") @db.VarChar(45)
+  userAgent  String? @map("user_agent") @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  actor User @relation(fields: [actorId], references: [id])
+
+  @@index([actorId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// =============================================================
+// NOTIFICATIONS
+// =============================================================
+
+/// Notifikasi in-app untuk user
+model Notification {
+  id      String           @id @default(uuid()) @db.Uuid
+  userId  String           @map("user_id") @db.Uuid
+  type    NotificationType
+  title   String           @db.VarChar(255)
+  message String           @db.Text
+  isRead  Boolean          @default(false) @map("is_read")
+  data    Json?            // metadata tambahan (productId, sessionId, dll)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, isRead])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("notifications")
+}
