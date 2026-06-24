@@ -1,0 +1,92 @@
+# =============================================================
+# SmartStock — CI Workflow
+# Berjalan di setiap Push ke branch manapun dan Pull Request.
+# Pipeline: Install → Generate Prisma → Type-check → Lint → Build
+# =============================================================
+
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '20'
+  # Dummy DB URL agar Prisma generate bisa berjalan tanpa koneksi nyata
+  DATABASE_URL: 'postgresql://dummy:dummy@localhost:5432/smartstock'
+  DIRECT_URL: 'postgresql://dummy:dummy@localhost:5432/smartstock'
+
+jobs:
+  # ─────────────────────────────────────────────────────────────
+  # JOB 1: Validate — Type-check + Lint
+  # ─────────────────────────────────────────────────────────────
+  validate:
+    name: 🔍 Type-check & Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: TypeScript type-check
+        run: npm run type-check
+
+      - name: ESLint
+        run: npm run lint
+
+  # ─────────────────────────────────────────────────────────────
+  # JOB 2: Build — Pastikan production build berhasil
+  # ─────────────────────────────────────────────────────────────
+  build:
+    name: 🏗️ Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: validate
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Build Next.js
+        run: npm run build
+        env:
+          NEXT_PUBLIC_APP_URL: ${{ secrets.NEXT_PUBLIC_APP_URL || 'https://smartstock.vercel.app' }}
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nextjs-build-${{ github.sha }}
+          path: .next/
+          retention-days: 1
+          if-no-files-found: error

@@ -1,0 +1,64 @@
+# =============================================================
+# SmartStock — Database Migration Workflow
+# Berjalan secara manual (workflow_dispatch) atau otomatis
+# setelah deploy production berhasil.
+# =============================================================
+
+name: Database Migration
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - staging
+  workflow_run:
+    workflows: ['Deploy to Vercel']
+    types: [completed]
+    branches: [main]
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  migrate:
+    name: 🗄️ Run Prisma Migrations
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Hanya jalankan jika deploy berhasil (workflow_run) atau manual
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+
+    environment:
+      name: ${{ github.event.inputs.environment || 'production' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Prisma migrations (deploy mode)
+        run: npx prisma migrate deploy
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+
+      - name: Verify migration status
+        run: npx prisma migrate status
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
