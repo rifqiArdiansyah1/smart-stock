@@ -1,7 +1,5 @@
-import { PrismaClient } from '@prisma/client';
+import { db as prisma } from '../src/lib/db';
 import * as bcrypt from 'bcryptjs';
-
-const prisma = new PrismaClient();
 
 async function main() {
   console.log('🌱 Seeding SmartStock database...\n');

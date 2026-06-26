@@ -1,12 +1,13 @@
 import Link from 'next/link';
+import { auth } from '@/auth';
+import LogoutButton from './components/LogoutButton';
 
 /**
- * SmartStock — Landing / Coming Soon Page
- *
- * Halaman sementara saat development.
- * Akan diganti dengan dashboard setelah ISSUE-020.
+ * SmartStock — Landing / Dashboard Page
  */
-export default function HomePage() {
+export default async function HomePage() {
+  const session = await auth();
+
   return (
     <main className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 px-4">
       {/* Background decoration */}
@@ -33,64 +34,30 @@ export default function HomePage() {
           </svg>
         </div>
 
-        {/* App Name */}
-        <h1 className="text-5xl font-bold text-white mb-3 tracking-tight">
-          Smart<span className="text-indigo-400">Stock</span>
+        {/* Welcome Message */}
+        <h1 className="text-4xl font-bold text-white mb-3 tracking-tight">
+          Selamat Datang, <span className="text-indigo-400">{session?.user?.name || 'Guest'}</span>!
         </h1>
-
-        {/* Tagline */}
-        <p className="text-xl text-slate-300 mb-2 font-medium">
-          Sistem Manajemen Inventaris Cerdas
-        </p>
-        <p className="text-slate-400 mb-10 leading-relaxed">
-          Anti-selisih misterius. Penuh audit trail. <br />
-          Dirancang untuk kecepatan input & integritas data stok.
-        </p>
-
-        {/* Feature Pills */}
-        <div className="flex flex-wrap gap-2 justify-center mb-10">
-          {[
-            '⚡ Stock Opname Cepat',
-            '🔍 Audit Trail Penuh',
-            '📱 PWA Offline-First',
-            '🔐 RBAC Multi-Role',
-            '📊 Analytics Real-time',
-          ].map((feature) => (
-            <span
-              key={feature}
-              className="px-3 py-1.5 rounded-full bg-white/10 text-slate-200 text-sm font-medium border border-white/10"
-            >
-              {feature}
-            </span>
-          ))}
+        
+        {/* User Info Pill */}
+        <div className="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-white/10 border border-white/20 text-slate-200 mb-10 shadow-inner">
+          <span className="w-2 h-2 rounded-full bg-success-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]" />
+          <span className="font-medium text-sm">Role: {session?.user?.role || 'UNKNOWN'}</span>
         </div>
 
-        {/* Status Badge */}
-        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-amber-500/20 border border-amber-500/30 text-amber-300 text-sm mb-8">
-          <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse-badge" />
-          <span>Development in progress — Sprint 1</span>
-        </div>
+        <p className="text-slate-400 mb-10 leading-relaxed max-w-lg mx-auto">
+          Anda berhasil login ke sistem. Akses menu dan fitur telah disesuaikan dengan role Anda di SmartStock.
+        </p>
 
-        {/* Development Links */}
-        <div className="mt-4 flex flex-col sm:flex-row gap-3 justify-center">
+        {/* Actions */}
+        <div className="mt-4 flex flex-col sm:flex-row gap-4 justify-center items-center">
           <Link
-            href="https://github.com/rifqiArdiansyah1/smart-stock/issues"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition-colors duration-200 text-sm"
-            id="github-issues-link"
+            href="/inventory"
+            className="px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition-all duration-200 text-sm shadow-lg shadow-indigo-600/30"
           >
-            📋 Lihat Issue Board
+            📦 Buka Inventaris
           </Link>
-          <Link
-            href="https://github.com/rifqiArdiansyah1/smart-stock"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="px-6 py-3 rounded-xl bg-white/10 hover:bg-white/20 text-white font-semibold transition-colors duration-200 text-sm border border-white/10"
-            id="github-repo-link"
-          >
-            ⭐ GitHub Repository
-          </Link>
+          <LogoutButton />
         </div>
       </div>
 
