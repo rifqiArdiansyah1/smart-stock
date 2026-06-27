@@ -14,5 +14,15 @@ services:
       - smartstock-db-data:/var/lib/postgresql/data
     restart: unless-stopped
 
+  redis:
+    image: redis:7-alpine
+    container_name: smartstock-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - smartstock-redis-data:/data
+    restart: unless-stopped
+
 volumes:
   smartstock-db-data:
+  smartstock-redis-data:

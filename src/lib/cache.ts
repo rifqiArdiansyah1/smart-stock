@@ -6,6 +6,8 @@
  * - Deduplication lock untuk low-stock alerts
  * - Opname session lock (cegah 2 sesi di lokasi yang sama)
  * - Rate limiter berbasis Redis untuk API protection
+ *
+ * Menggunakan ioredis (koneksi standar ke Redis lokal / Upstash).
  */
 
 import { redis } from '@/lib/redis';
@@ -25,8 +27,10 @@ export async function getCachedStock(
   locationId: string,
 ): Promise<number | null> {
   const key = REDIS_KEYS.STOCK_LEVEL(productId, locationId);
-  const cached = await redis.get<number>(key);
-  return cached ?? null;
+  const cached = await redis.get(key);
+  if (cached === null) return null;
+  const num = Number(cached);
+  return isNaN(num) ? null : num;
 }
 
 /**
@@ -38,7 +42,7 @@ export async function setCachedStock(
   quantity: number,
 ): Promise<void> {
   const key = REDIS_KEYS.STOCK_LEVEL(productId, locationId);
-  await redis.set(key, quantity, { ex: STOCK_CACHE_TTL });
+  await redis.set(key, String(quantity), 'EX', STOCK_CACHE_TTL);
 }
 
 /**
@@ -73,11 +77,11 @@ export async function isLowStockAlertSent(productId: string): Promise<boolean> {
 export async function markLowStockAlertSent(productId: string): Promise<void> {
   const key = REDIS_KEYS.LOW_STOCK_ALERT(productId);
   const ttlSeconds = LOW_STOCK_ALERT_TTL_HOURS * 3600;
-  await redis.set(key, '1', { ex: ttlSeconds });
+  await redis.set(key, '1', 'EX', ttlSeconds);
 }
 
 /**
- * Reset dedup flag (dipakai setelah restock — boleh alert lagi).
+ * Reset dedup flag (dipakai setelah restock — boleh alert lagi)
  */
 export async function resetLowStockAlert(productId: string): Promise<void> {
   const key = REDIS_KEYS.LOW_STOCK_ALERT(productId);
@@ -99,11 +103,8 @@ export async function acquireOpnameLock(
   sessionId: string,
 ): Promise<boolean> {
   const key = REDIS_KEYS.OPNAME_LOCK(locationId);
-  // NX = only set if not exists, EX = TTL
-  const result = await redis.set(key, sessionId, {
-    nx: true,
-    ex: OPNAME_LOCK_TTL,
-  });
+  // SET key value NX EX ttl (ioredis style)
+  const result = await redis.set(key, sessionId, 'EX', OPNAME_LOCK_TTL, 'NX');
   return result === 'OK';
 }
 
@@ -123,7 +124,7 @@ export async function getActiveOpnameSession(
   locationId: string,
 ): Promise<string | null> {
   const key = REDIS_KEYS.OPNAME_LOCK(locationId);
-  return redis.get<string>(key);
+  return redis.get(key);
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -140,7 +141,7 @@ export interface RateLimitResult {
  * Rate limiter berbasis Redis sliding counter.
  * Cocok untuk melindungi API endpoints dari abuse.
  *
- * @param identifier - Unique key (misal: `api:login:${ip}`)
+ * @param identifier  - Unique key (misal: `api:login:${ip}`)
  * @param maxRequests - Maksimum request dalam window
  * @param windowSeconds - Ukuran window dalam detik
  */
@@ -161,18 +162,10 @@ export async function rateLimit(
   const resetAt = new Date(Date.now() + ttl * 1000);
 
   if (count > maxRequests) {
-    return {
-      success: false,
-      remaining: 0,
-      resetAt,
-    };
+    return { success: false, remaining: 0, resetAt };
   }
 
-  return {
-    success: true,
-    remaining: maxRequests - count,
-    resetAt,
-  };
+  return { success: true, remaining: maxRequests - count, resetAt };
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -197,7 +190,7 @@ export async function cacheUserSession(
   session: CachedUserSession,
 ): Promise<void> {
   const key = REDIS_KEYS.USER_SESSION(userId);
-  await redis.set(key, JSON.stringify(session), { ex: SESSION_TTL });
+  await redis.set(key, JSON.stringify(session), 'EX', SESSION_TTL);
 }
 
 /**
@@ -207,12 +200,10 @@ export async function getCachedUserSession(
   userId: string,
 ): Promise<CachedUserSession | null> {
   const key = REDIS_KEYS.USER_SESSION(userId);
-  const raw = await redis.get<string>(key);
+  const raw = await redis.get(key);
   if (!raw) return null;
   try {
-    return typeof raw === 'string'
-      ? (JSON.parse(raw) as CachedUserSession)
-      : (raw as CachedUserSession);
+    return JSON.parse(raw) as CachedUserSession;
   } catch {
     return null;
   }

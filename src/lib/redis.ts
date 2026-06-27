@@ -1,21 +1,16 @@
 /**
- * SmartStock — Redis Client (Upstash)
+ * SmartStock — Redis Client
  *
- * Singleton Redis client menggunakan Upstash Redis REST API.
- * Upstash dipilih karena:
- * - Serverless-friendly (billing per request, bukan per waktu)
- * - Compatible dengan Vercel Edge/Serverless Functions
- * - Tidak butuh koneksi persisten seperti Redis biasa
+ * Singleton Redis client menggunakan ioredis.
+ * Mendukung koneksi standar ke server Redis lokal atau Upstash Redis (lewat ioredis-compatible endpoint).
  *
  * Penggunaan:
  *   import { redis } from '@/lib/redis';
- *   await redis.set('key', 'value', { ex: 60 }); // TTL 60 detik
+ *   await redis.set('key', 'value', 'EX', 60); // TTL 60 detik
  *   const val = await redis.get('key');
- *
- * @see https://upstash.com/docs/redis/sdks/ts/overview
  */
 
-import { Redis } from '@upstash/redis';
+import Redis from 'ioredis';
 
 // ── Singleton instance ────────────────────────────────────────
 const globalForRedis = globalThis as unknown as {
@@ -23,18 +18,8 @@ const globalForRedis = globalThis as unknown as {
 };
 
 function createRedisClient(): Redis {
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-
-  if (!url || !token) {
-    throw new Error(
-      '[SmartStock/Redis] UPSTASH_REDIS_REST_URL dan UPSTASH_REDIS_REST_TOKEN ' +
-        'harus diset di environment variables. ' +
-        'Lihat .env.example untuk format yang benar.',
-    );
-  }
-
-  return new Redis({ url, token });
+  const url = process.env.UPSTASH_REDIS_URL || 'redis://localhost:6379';
+  return new Redis(url);
 }
 
 export const redis: Redis =
@@ -47,24 +32,24 @@ if (process.env.NODE_ENV !== 'production') {
 // ── Helper functions ──────────────────────────────────────────
 
 /**
- * Set value dengan TTL (detik). Shorthand untuk redis.set dengan ex.
+ * Set value dengan TTL (detik).
  */
 export async function setWithTTL(
   key: string,
   value: unknown,
   ttlSeconds: number,
 ): Promise<void> {
-  await redis.set(key, JSON.stringify(value), { ex: ttlSeconds });
+  await redis.set(key, JSON.stringify(value), 'EX', ttlSeconds);
 }
 
 /**
  * Get value dan parse JSON. Return null jika tidak ada.
  */
 export async function getJSON<T>(key: string): Promise<T | null> {
-  const raw = await redis.get<string>(key);
+  const raw = await redis.get(key);
   if (!raw) return null;
   try {
-    return typeof raw === 'string' ? (JSON.parse(raw) as T) : (raw as T);
+    return JSON.parse(raw) as T;
   } catch {
     return raw as unknown as T;
   }
@@ -98,3 +83,4 @@ export async function increment(key: string, ttlSeconds?: number): Promise<numbe
 }
 
 export default redis;
+
