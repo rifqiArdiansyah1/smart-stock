@@ -32,7 +32,7 @@ import { type Role, type Permission, isAllowedRole, hasPermission } from './rbac
 // ── Types ─────────────────────────────────────────────────────
 
 type RouteContext = {
-  params?: Record<string, string | string[]>;
+  params?: Promise<Record<string, string | string[]>>;
 };
 
 type RouteHandler = (
