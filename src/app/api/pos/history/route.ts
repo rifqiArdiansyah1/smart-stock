@@ -1,20 +1,7 @@
-/**
- * GET /api/pos/history
- *
- * Riwayat transaksi penjualan — dikelompokkan per referenceId.
- * Hanya menampilkan StockMovement dengan type=SALE.
- *
- * Query params:
- *  - date     : filter tanggal (YYYY-MM-DD)
- *  - actorId  : filter per kasir
- *  - page, limit
- *
- * Guard: ADMIN, OWNER
- */
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { db } from '@/lib/db';
 import { ROLES } from '@/lib/rbac';
+import { db } from '@/lib/db';
 
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -23,98 +10,134 @@ export async function GET(req: NextRequest) {
   }
 
   const role = (session.user as any).role;
-  const allowedRoles = [ROLES.OWNER, ROLES.ADMIN];
-  if (!allowedRoles.includes(role)) {
+  if (role !== ROLES.OWNER && role !== ROLES.ADMIN) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  const { searchParams } = new URL(req.url);
-  const dateStr = searchParams.get('date') ?? '';
-  const actorId = searchParams.get('actorId') ?? '';
-  const page = Math.max(1, Number(searchParams.get('page') ?? '1'));
-  const limit = Math.min(100, Number(searchParams.get('limit') ?? '20'));
-
   try {
-    const where: any = { type: 'SALE', referenceId: { not: null } };
+    const { searchParams } = new URL(req.url);
+    const date = searchParams.get('date'); // YYYY-MM-DD
+    const page = Math.max(1, Number(searchParams.get('page') ?? '1'));
+    const limit = Math.min(100, Number(searchParams.get('limit') ?? '20')); // limit of *transactions*, not items
+    const skip = (page - 1) * limit;
 
-    if (actorId) where.actorId = actorId;
+    // Build Prisma where clause
+    const where: any = {
+      type: 'SALE',
+      referenceId: { not: null },
+    };
 
-    if (dateStr) {
-      const start = new Date(dateStr);
-      const end = new Date(dateStr);
-      end.setDate(end.getDate() + 1);
-      where.createdAt = { gte: start, lt: end };
+    if (date) {
+      const startOfDay = new Date(date);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(date);
+      endOfDay.setHours(23, 59, 59, 999);
+      where.createdAt = {
+        gte: startOfDay,
+        lte: endOfDay,
+      };
     }
 
-    // Ambil semua movements SALE
-    const allMovements = await db.stockMovement.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        referenceId: true,
-        quantityChange: true,
-        quantityBefore: true,
-        quantityAfter: true,
-        notes: true,
-        createdAt: true,
-        product: { select: { id: true, name: true, sku: true, unit: true, price: true } },
-        location: { select: { id: true, name: true, type: true } },
-        actor: { select: { id: true, name: true, email: true } },
+    // Step 1: Get distinct referenceIds (transactions)
+    // Prisma distinct doesn't allow ordering by non-selected fields easily with pagination,
+    // so we'll fetch movements, group them in DB is hard.
+    // Instead, fetch raw query or just fetch movements and group.
+    // Since we need pagination on *transactions*, let's use raw query for the referenceIds.
+    
+    let queryArgs: any = [where.type];
+    let dateFilter = '';
+    
+    if (where.createdAt) {
+      dateFilter = `AND "created_at" >= $2 AND "created_at" <= $3`;
+      queryArgs.push(where.createdAt.gte, where.createdAt.lte);
+    }
+    
+    const countArgs = [...queryArgs];
+    
+    queryArgs.push(limit, skip);
+    const limitOffsetParams = dateFilter ? `LIMIT $4 OFFSET $5` : `LIMIT $2 OFFSET $3`;
+
+    // Fetch distinct referenceIds sorted by max(createdAt) desc
+    const transactionIdsRaw = await db.$queryRawUnsafe<any[]>(
+      `SELECT "reference_id" as ref, MAX("created_at") as max_date
+       FROM "stock_movements"
+       WHERE "type" = $1 AND "reference_id" IS NOT NULL ${dateFilter}
+       GROUP BY "reference_id"
+       ORDER BY max_date DESC
+       ${limitOffsetParams}`,
+      ...queryArgs
+    );
+
+    const countResult = await db.$queryRawUnsafe<any[]>(
+      `SELECT COUNT(DISTINCT "reference_id")::int as total
+       FROM "stock_movements"
+       WHERE "type" = $1 AND "reference_id" IS NOT NULL ${dateFilter}`,
+      ...countArgs
+    );
+
+    const total = countResult[0]?.total || 0;
+    const referenceIds = transactionIdsRaw.map(r => r.ref);
+
+    if (referenceIds.length === 0) {
+      return NextResponse.json({
+        data: [],
+        meta: { page, limit, total, totalPages: 0 },
+      });
+    }
+
+    // Step 2: Fetch full details for those referenceIds
+    const movements = await db.stockMovement.findMany({
+      where: {
+        referenceId: { in: referenceIds },
+        type: 'SALE'
       },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        product: {
+          select: { id: true, name: true, sku: true, price: true, unit: true }
+        },
+        actor: {
+          select: { id: true, name: true }
+        },
+        location: {
+          select: { id: true, name: true }
+        }
+      }
     });
 
-    // Group by referenceId
-    const grouped = new Map<
-      string,
-      {
-        referenceId: string;
-        processedAt: string;
-        actor: { id: string; name: string; email: string };
-        location: { id: string; name: string; type: string } | null;
-        items: typeof allMovements;
-        totalAmount: number;
-      }
-    >();
-
-    for (const m of allMovements) {
-      const refId = m.referenceId!;
-      if (!grouped.has(refId)) {
-        grouped.set(refId, {
-          referenceId: refId,
-          processedAt: m.createdAt.toISOString(),
-          actor: m.actor,
-          location: m.location,
+    // Step 3: Group by referenceId
+    const grouped = movements.reduce((acc, curr) => {
+      const ref = curr.referenceId!;
+      if (!acc[ref]) {
+        acc[ref] = {
+          id: ref,
+          date: curr.createdAt,
+          cashier: curr.actor.name,
+          location: curr.location?.name || '-',
           items: [],
           totalAmount: 0,
-        });
+        };
       }
-      const group = grouped.get(refId)!;
-      group.items.push(m);
-      const price = m.product.price ? Number(m.product.price) : 0;
-      group.totalAmount += price * Math.abs(m.quantityChange);
-    }
+      const qty = Math.abs(curr.quantityChange);
+      const price = curr.product.price ? Number(curr.product.price) : 0;
+      acc[ref].items.push({
+        productId: curr.product.id,
+        name: curr.product.name,
+        sku: curr.product.sku,
+        quantity: qty,
+        unit: curr.product.unit,
+        price: price,
+        subtotal: qty * price,
+      });
+      acc[ref].totalAmount += qty * price;
+      return acc;
+    }, {} as Record<string, any>);
 
-    const transactions = Array.from(grouped.values());
-    const total = transactions.length;
-    const paginated = transactions.slice((page - 1) * limit, page * limit);
-
-    // Format items
-    const formatted = paginated.map((t) => ({
-      ...t,
-      items: t.items.map((m) => ({
-        productId: m.product.id,
-        name: m.product.name,
-        sku: m.product.sku,
-        unit: m.product.unit,
-        price: m.product.price ? Number(m.product.price) : 0,
-        quantity: Math.abs(m.quantityChange),
-        subtotal: m.product.price ? Number(m.product.price) * Math.abs(m.quantityChange) : 0,
-      })),
-    }));
+    // Convert to array and sort by date descending
+    const data = Object.values(grouped).sort((a, b) => b.date.getTime() - a.date.getTime());
 
     return NextResponse.json({
-      data: formatted,
+      data,
       meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
     });
   } catch (err) {

@@ -1,23 +1,17 @@
 import { Metadata } from 'next';
 import { auth } from '@/auth';
 import { redirect } from 'next/navigation';
-import { ROLES } from '@/lib/rbac';
 import { db } from '@/lib/db';
 import POSInterface from './POSInterface';
 
 export const metadata: Metadata = {
-  title: 'Kasir — SmartStock',
-  description: 'Interface kasir untuk proses penjualan SmartStock',
+  title: 'Kasir / POS — SmartStock',
+  description: 'Modul Penjualan dan Kasir SmartStock',
 };
-
-const ALLOWED_ROLES = [ROLES.KASIR, ROLES.ADMIN, ROLES.OWNER];
 
 export default async function KasirPage() {
   const session = await auth();
   if (!session?.user) redirect('/login');
-
-  const role = (session.user as any).role as string;
-  if (!ALLOWED_ROLES.includes(role as any)) redirect('/');
 
   const locations = await db.location.findMany({
     where: { isActive: true },
@@ -26,32 +20,29 @@ export default async function KasirPage() {
   });
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 px-4 py-8">
-      <div className="max-w-5xl mx-auto space-y-6">
-
-        {/* Header */}
-        <div className="flex items-start justify-between flex-wrap gap-4">
-          <div>
-            <div className="flex items-center gap-2 text-sm text-slate-400 mb-2">
-              <a href="/" className="hover:text-slate-600 transition-colors">Dashboard</a>
-              <span>/</span>
-              <span className="text-slate-600 font-medium">Kasir</span>
-            </div>
-            <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Modul Kasir</h1>
-            <p className="text-slate-500 text-sm mt-1">
-              Scan barcode atau ketik SKU untuk menambah produk ke keranjang.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 border border-emerald-200 rounded-xl">
-            <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-            <span className="text-sm font-medium text-emerald-700">
-              {session.user.name ?? session.user.email}
+    <main className="min-h-screen bg-slate-50 flex flex-col h-screen">
+      {/* Header Kasir */}
+      <header className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between shrink-0">
+        <div>
+          <h1 className="text-xl font-bold text-slate-800 tracking-tight flex items-center gap-2">
+            <span className="text-primary-600">
+              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+              </svg>
             </span>
-          </div>
+            SmartStock POS
+          </h1>
+          <p className="text-xs text-slate-500 mt-0.5">Sistem Point of Sale & Kasir</p>
         </div>
+        <div className="flex items-center gap-4 text-sm font-medium text-slate-600">
+          <a href="/" className="hover:text-primary-600 transition-colors bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
+            Kembali ke Dashboard
+          </a>
+        </div>
+      </header>
 
-        {/* POS Interface */}
+      {/* Main POS Interface (Client) */}
+      <div className="flex-1 overflow-hidden">
         <POSInterface locations={locations} />
       </div>
     </main>

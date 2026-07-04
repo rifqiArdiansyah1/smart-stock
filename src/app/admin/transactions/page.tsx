@@ -6,197 +6,256 @@ import { db } from '@/lib/db';
 
 export const metadata: Metadata = {
   title: 'Riwayat Transaksi — SmartStock',
-  description: 'Riwayat penjualan dan transaksi kasir',
+  description: 'Riwayat transaksi penjualan kasir',
 };
 
-function formatCurrency(v: number) {
-  return new Intl.NumberFormat('id-ID', {
-    style: 'currency',
-    currency: 'IDR',
-    maximumFractionDigits: 0,
-  }).format(v);
-}
-
-const LOCATION_TYPE_ICON: Record<string, string> = {
-  GUDANG: '🏭', RAK: '📦', AREA: '📍', TOKO: '🏪',
-};
-
-export default async function TransactionsPage() {
+export default async function TransactionsPage(props: { searchParams: Promise<{ date?: string, page?: string }> }) {
+  const searchParams = await props.searchParams;
   const session = await auth();
   if (!session?.user) redirect('/login');
 
-  const role = (session.user as any).role as string;
-  if (role !== ROLES.OWNER && role !== ROLES.ADMIN) redirect('/');
-
-  // Ambil semua SALE movements dan kelompokkan
-  const movements = await db.stockMovement.findMany({
-    where: { type: 'SALE', referenceId: { not: null } },
-    orderBy: { createdAt: 'desc' },
-    take: 500, // limit untuk performa
-    select: {
-      id: true,
-      referenceId: true,
-      quantityChange: true,
-      createdAt: true,
-      product: { select: { id: true, name: true, sku: true, unit: true, price: true } },
-      location: { select: { id: true, name: true, type: true } },
-      actor: { select: { id: true, name: true, email: true } },
-    },
-  });
-
-  // Group by referenceId
-  const grouped = new Map<string, {
-    referenceId: string;
-    processedAt: Date;
-    actor: { id: string; name: string; email: string };
-    location: { id: string; name: string; type: string } | null;
-    items: typeof movements;
-    totalAmount: number;
-  }>();
-
-  for (const m of movements) {
-    const refId = m.referenceId!;
-    if (!grouped.has(refId)) {
-      grouped.set(refId, {
-        referenceId: refId,
-        processedAt: m.createdAt,
-        actor: m.actor,
-        location: m.location,
-        items: [],
-        totalAmount: 0,
-      });
-    }
-    const group = grouped.get(refId)!;
-    group.items.push(m);
-    const price = m.product.price ? Number(m.product.price) : 0;
-    group.totalAmount += price * Math.abs(m.quantityChange);
+  const role = (session.user as any).role;
+  if (role !== ROLES.OWNER && role !== ROLES.ADMIN) {
+    redirect('/'); // Forbidden
   }
 
-  const transactions = Array.from(grouped.values());
-  const totalRevenue = transactions.reduce((s, t) => s + t.totalAmount, 0);
-  const totalItems = movements.reduce((s, m) => s + Math.abs(m.quantityChange), 0);
+  const dateParam = searchParams.date || '';
+  const page = Math.max(1, Number(searchParams.page || '1'));
+  const limit = 20;
+  const skip = (page - 1) * limit;
+
+  // Build where
+  const where: any = {
+    type: 'SALE',
+    referenceId: { not: null },
+  };
+
+  if (dateParam) {
+    const startOfDay = new Date(dateParam);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(dateParam);
+    endOfDay.setHours(23, 59, 59, 999);
+    where.createdAt = {
+      gte: startOfDay,
+      lte: endOfDay,
+    };
+  }
+
+  // Fetch unique referenceIds for pagination using raw query (Prisma doesn't easily support paginated distinct queries)
+  let dateFilter = '';
+  const queryArgs: any[] = ['SALE'];
+
+  if (where.createdAt) {
+    dateFilter = `AND "created_at" >= $2 AND "created_at" <= $3`;
+    queryArgs.push(where.createdAt.gte, where.createdAt.lte);
+  }
+
+  const countArgs = [...queryArgs];
+  
+  queryArgs.push(limit, skip);
+  const limitOffsetParams = dateFilter ? `LIMIT $4 OFFSET $5` : `LIMIT $2 OFFSET $3`;
+
+  const transactionIdsRaw = await db.$queryRawUnsafe<any[]>(
+    `SELECT "reference_id" as ref, MAX("created_at") as max_date
+     FROM "stock_movements"
+     WHERE "type" = $1 AND "reference_id" IS NOT NULL ${dateFilter}
+     GROUP BY "reference_id"
+     ORDER BY max_date DESC
+     ${limitOffsetParams}`,
+    ...queryArgs
+  );
+
+  const countResult = await db.$queryRawUnsafe<any[]>(
+    `SELECT COUNT(DISTINCT "reference_id")::int as total
+     FROM "stock_movements"
+     WHERE "type" = $1 AND "reference_id" IS NOT NULL ${dateFilter}`,
+    ...countArgs
+  );
+
+  const total = countResult[0]?.total || 0;
+  const totalPages = Math.ceil(total / limit);
+  const referenceIds = transactionIdsRaw.map(r => r.ref);
+
+  let data: any[] = [];
+  let summary = { transactions: 0, revenue: 0 };
+
+  if (referenceIds.length > 0) {
+    const movements = await db.stockMovement.findMany({
+      where: {
+        referenceId: { in: referenceIds },
+        type: 'SALE'
+      },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        product: { select: { id: true, name: true, sku: true, price: true, unit: true } },
+        actor: { select: { id: true, name: true } },
+        location: { select: { id: true, name: true } }
+      }
+    });
+
+    const grouped = movements.reduce((acc, curr) => {
+      const ref = curr.referenceId!;
+      if (!acc[ref]) {
+        acc[ref] = {
+          id: ref,
+          date: curr.createdAt,
+          cashier: curr.actor.name,
+          location: curr.location?.name || '-',
+          items: [],
+          totalAmount: 0,
+        };
+      }
+      const qty = Math.abs(curr.quantityChange);
+      const price = curr.product.price ? Number(curr.product.price) : 0;
+      acc[ref].items.push({
+        productId: curr.product.id,
+        name: curr.product.name,
+        sku: curr.product.sku,
+        quantity: qty,
+        unit: curr.product.unit,
+        price: price,
+        subtotal: qty * price,
+      });
+      acc[ref].totalAmount += qty * price;
+      return acc;
+    }, {} as Record<string, any>);
+
+    data = Object.values(grouped).sort((a, b) => b.date.getTime() - a.date.getTime());
+    
+    // Calculate total revenue for this page (or ideally for the day, but we'll show page summary)
+    summary.transactions = data.length;
+    summary.revenue = data.reduce((sum, tx) => sum + tx.totalAmount, 0);
+  }
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 px-4 py-10">
-      <div className="max-w-6xl mx-auto space-y-6">
+      <div className="max-w-7xl mx-auto space-y-6">
 
         {/* Header */}
-        <div>
-          <div className="flex items-center gap-2 text-sm text-slate-400 mb-2">
-            <a href="/" className="hover:text-slate-600 transition-colors">Dashboard</a>
-            <span>/</span>
-            <span className="text-slate-600 font-medium">Riwayat Transaksi</span>
+        <div className="flex items-start justify-between flex-wrap gap-4">
+          <div>
+            <div className="flex items-center gap-2 text-sm text-slate-400 mb-2">
+              <a href="/" className="hover:text-slate-600 transition-colors">Dashboard</a>
+              <span>/</span>
+              <span className="text-slate-600 font-medium">Riwayat Transaksi</span>
+            </div>
+            <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Riwayat Transaksi Penjualan</h1>
+            <p className="text-slate-500 text-sm mt-1">Data penjualan dari modul kasir / POS.</p>
           </div>
-          <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Riwayat Transaksi</h1>
-          <p className="text-slate-500 text-sm mt-1">Semua transaksi penjualan yang dicatat melalui modul kasir.</p>
+          
+          <form className="flex items-center gap-2 bg-white p-2 rounded-xl border border-slate-200 shadow-sm">
+            <span className="text-sm font-medium text-slate-500 px-2">Tanggal:</span>
+            <input 
+              type="date" 
+              name="date"
+              defaultValue={dateParam}
+              className="px-3 py-1.5 rounded-lg border border-slate-200 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none transition-all text-sm"
+            />
+            <button type="submit" className="px-4 py-1.5 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-500 transition-colors">
+              Filter
+            </button>
+            {dateParam && (
+              <a href="/admin/transactions" className="px-3 py-1.5 text-sm text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors">
+                Reset
+              </a>
+            )}
+          </form>
         </div>
 
-        {/* Summary Cards */}
-        <div className="grid grid-cols-3 gap-4">
-          {[
-            { label: 'Total Transaksi', value: transactions.length, icon: '🧾', color: 'from-blue-500/10 to-indigo-500/10 border-blue-200/60' },
-            { label: 'Total Item Terjual', value: totalItems, icon: '📦', color: 'from-purple-500/10 to-violet-500/10 border-purple-200/60' },
-            { label: 'Total Pendapatan', value: formatCurrency(totalRevenue), icon: '💰', color: 'from-emerald-500/10 to-green-500/10 border-emerald-200/60', isText: true },
-          ].map(({ label, value, icon, color, isText }) => (
-            <div key={label} className={`bg-gradient-to-br ${color} border rounded-2xl px-5 py-4`}>
-              <div className="text-xl mb-1">{icon}</div>
-              <div className={`font-bold text-slate-800 ${isText ? 'text-xl' : 'text-2xl'}`}>{value}</div>
-              <div className="text-sm text-slate-500">{label}</div>
-            </div>
-          ))}
+        {/* Stat Cards (For current view) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="bg-white border border-slate-200 rounded-2xl px-6 py-5 shadow-sm">
+            <div className="text-sm text-slate-500 mb-1">Total Transaksi (Halaman Ini)</div>
+            <div className="text-3xl font-bold text-slate-800">{summary.transactions}</div>
+          </div>
+          <div className="bg-white border border-slate-200 rounded-2xl px-6 py-5 shadow-sm">
+            <div className="text-sm text-slate-500 mb-1">Total Pendapatan (Halaman Ini)</div>
+            <div className="text-3xl font-bold text-emerald-600">Rp {summary.revenue.toLocaleString('id-ID')}</div>
+          </div>
         </div>
 
         {/* Transactions List */}
-        <div className="space-y-3">
-          {transactions.length === 0 ? (
-            <div className="py-16 text-center bg-white rounded-2xl border border-slate-200">
-              <p className="text-4xl mb-3">🧾</p>
-              <p className="font-medium text-slate-600">Belum ada transaksi</p>
-              <p className="text-sm text-slate-400 mt-1">Transaksi dari modul kasir akan muncul di sini.</p>
+        <div className="space-y-4">
+          {data.length === 0 ? (
+            <div className="py-16 text-center text-slate-400 bg-white rounded-2xl border border-slate-200 shadow-sm">
+              <p className="text-5xl mb-4">🧾</p>
+              <p className="font-medium text-slate-600 text-lg">Belum ada transaksi</p>
+              <p className="text-sm mt-1">
+                {dateParam ? `Tidak ada data transaksi untuk tanggal ${dateParam}.` : 'Belum ada data penjualan dari kasir.'}
+              </p>
             </div>
           ) : (
-            transactions.map((t) => (
-              <details
-                key={t.referenceId}
-                className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden group"
-              >
-                <summary className="px-5 py-4 flex items-center gap-4 cursor-pointer hover:bg-slate-50/70 transition-colors list-none">
-                  {/* Icon */}
-                  <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-lg shrink-0">
-                    🧾
+            data.map((tx) => (
+              <div key={tx.id} className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-300">
+                <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex flex-wrap gap-4 items-center justify-between">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-mono text-xs font-semibold px-2 py-1 bg-slate-200 text-slate-700 rounded uppercase">
+                        {tx.id.split('-')[0]}
+                      </span>
+                      <span className="text-sm text-slate-500">
+                        {tx.date.toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} · {tx.date.toLocaleTimeString('id-ID')}
+                      </span>
+                    </div>
+                    <div className="text-sm font-medium text-slate-700">
+                      📍 {tx.location} &nbsp;·&nbsp; 👤 Kasir: {tx.cashier}
+                    </div>
                   </div>
-
-                  {/* Info */}
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-slate-800 text-sm">
-                      #{t.referenceId.slice(0, 8).toUpperCase()}
-                    </p>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      {new Date(t.processedAt).toLocaleString('id-ID')} ·{' '}
-                      {LOCATION_TYPE_ICON[t.location?.type ?? ''] ?? '📍'} {t.location?.name ?? 'Tidak diketahui'} ·{' '}
-                      Kasir: {t.actor.name}
-                    </p>
+                  <div className="text-right">
+                    <div className="text-xs text-slate-500 uppercase tracking-wider font-semibold mb-1">Total Bayar</div>
+                    <div className="text-xl font-bold text-primary-600">Rp {tx.totalAmount.toLocaleString('id-ID')}</div>
                   </div>
-
-                  {/* Total & Items count */}
-                  <div className="text-right shrink-0">
-                    <p className="font-bold text-slate-800">{formatCurrency(t.totalAmount)}</p>
-                    <p className="text-xs text-slate-400">{t.items.length} produk</p>
-                  </div>
-
-                  {/* Chevron */}
-                  <svg className="w-4 h-4 text-slate-400 group-open:rotate-180 transition-transform shrink-0"
-                    fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </summary>
-
-                {/* Item Detail */}
-                <div className="border-t border-slate-100">
+                </div>
+                
+                <div className="p-0 overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="bg-slate-50">
-                        <th className="px-5 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase">Produk</th>
-                        <th className="px-5 py-2.5 text-right text-xs font-semibold text-slate-500 uppercase">Qty</th>
-                        <th className="px-5 py-2.5 text-right text-xs font-semibold text-slate-500 uppercase">Harga</th>
-                        <th className="px-5 py-2.5 text-right text-xs font-semibold text-slate-500 uppercase">Subtotal</th>
+                      <tr className="bg-white border-b border-slate-100">
+                        <th className="px-6 py-3 text-left font-semibold text-slate-500">Produk</th>
+                        <th className="px-6 py-3 text-right font-semibold text-slate-500">Harga</th>
+                        <th className="px-6 py-3 text-right font-semibold text-slate-500">Qty</th>
+                        <th className="px-6 py-3 text-right font-semibold text-slate-500">Subtotal</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {t.items.map((m) => {
-                        const price = m.product.price ? Number(m.product.price) : 0;
-                        const qty = Math.abs(m.quantityChange);
-                        return (
-                          <tr key={m.id} className="hover:bg-slate-50/50">
-                            <td className="px-5 py-3">
-                              <p className="font-medium text-slate-800">{m.product.name}</p>
-                              <p className="text-xs text-slate-400 font-mono">{m.product.sku}</p>
-                            </td>
-                            <td className="px-5 py-3 text-right text-slate-700">
-                              {qty} <span className="text-xs text-slate-400">{m.product.unit}</span>
-                            </td>
-                            <td className="px-5 py-3 text-right text-slate-600">{formatCurrency(price)}</td>
-                            <td className="px-5 py-3 text-right font-semibold text-slate-800">{formatCurrency(price * qty)}</td>
-                          </tr>
-                        );
-                      })}
+                    <tbody className="divide-y divide-slate-50">
+                      {tx.items.map((item: any, idx: number) => (
+                        <tr key={idx} className="hover:bg-slate-50/50">
+                          <td className="px-6 py-3">
+                            <div className="font-medium text-slate-800">{item.name}</div>
+                            <div className="font-mono text-xs text-slate-400">{item.sku}</div>
+                          </td>
+                          <td className="px-6 py-3 text-right text-slate-600">Rp {item.price.toLocaleString('id-ID')}</td>
+                          <td className="px-6 py-3 text-right font-medium text-slate-700">{item.quantity}</td>
+                          <td className="px-6 py-3 text-right font-semibold text-slate-800">Rp {item.subtotal.toLocaleString('id-ID')}</td>
+                        </tr>
+                      ))}
                     </tbody>
-                    <tfoot>
-                      <tr className="bg-slate-50">
-                        <td colSpan={3} className="px-5 py-3 text-right font-bold text-slate-700">Total</td>
-                        <td className="px-5 py-3 text-right font-bold text-emerald-600">{formatCurrency(t.totalAmount)}</td>
-                      </tr>
-                    </tfoot>
                   </table>
                 </div>
-              </details>
+              </div>
             ))
           )}
         </div>
 
-        <p className="text-center text-xs text-slate-400 pb-4">
-          Menampilkan {transactions.length} transaksi terakhir (maks. 500)
-        </p>
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex justify-center items-center gap-2 pt-4">
+            {page > 1 && (
+              <a href={`/admin/transactions?page=${page - 1}${dateParam ? `&date=${dateParam}` : ''}`} className="px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 font-medium text-sm transition-colors">
+                Sebelumnya
+              </a>
+            )}
+            <span className="text-sm font-medium text-slate-500 px-4">
+              Halaman {page} dari {totalPages}
+            </span>
+            {page < totalPages && (
+              <a href={`/admin/transactions?page=${page + 1}${dateParam ? `&date=${dateParam}` : ''}`} className="px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 font-medium text-sm transition-colors">
+                Selanjutnya
+              </a>
+            )}
+          </div>
+        )}
+
       </div>
     </main>
   );
