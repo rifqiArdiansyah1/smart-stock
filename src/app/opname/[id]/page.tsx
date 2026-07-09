@@ -14,14 +14,17 @@ export default async function OpnameWorkspacePage(props: { params: Promise<{ id:
   const session = await auth();
   if (!session?.user) redirect('/login');
 
+  const userRole = (session.user as any).role;
+
   const opnameSession = await db.stockOpnameSession.findUnique({
     where: { id },
     include: {
       location: true,
       startedBy: { select: { name: true } },
+      approvedBy: { select: { name: true } },
       items: {
         include: {
-          product: { select: { name: true, sku: true, unit: true } }
+          product: { select: { name: true, sku: true, unit: true, barcode: true } }
         }
       }
     }
@@ -35,7 +38,7 @@ export default async function OpnameWorkspacePage(props: { params: Promise<{ id:
     initialStock = await db.stockLevel.findMany({
       where: { locationId: opnameSession.locationId },
       include: {
-        product: { select: { id: true, name: true, sku: true, unit: true } }
+        product: { select: { id: true, name: true, sku: true, unit: true, barcode: true } }
       }
     });
   }
@@ -69,6 +72,7 @@ export default async function OpnameWorkspacePage(props: { params: Promise<{ id:
         <OpnameWorkspace 
           sessionData={opnameSession as any} 
           systemStock={initialStock as any} 
+          userRole={userRole}
         />
       </div>
     </main>

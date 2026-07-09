@@ -8,6 +8,7 @@ import BarcodeScanner from './BarcodeScanner';
 interface OpnameWorkspaceProps {
   sessionData: any;
   systemStock: any[];
+  userRole: string;
 }
 
 type DraftItem = {
@@ -15,10 +16,13 @@ type DraftItem = {
   notes: string;
 };
 
-export default function OpnameWorkspace({ sessionData, systemStock }: OpnameWorkspaceProps) {
+export default function OpnameWorkspace({ sessionData, systemStock, userRole }: OpnameWorkspaceProps) {
   const router = useRouter();
   const sessionId = sessionData.id;
   const isReadOnly = sessionData.status !== 'IN_PROGRESS';
+  const isAdminOrOwner = userRole === 'ADMIN' || userRole === 'OWNER';
+  const isPending = sessionData.status === 'PENDING_APPROVAL';
+  const canReview = isAdminOrOwner && isPending;
   
   const [drafts, setDrafts] = useState<Record<string, DraftItem>>({});
   const [isLoaded, setIsLoaded] = useState(false);
@@ -29,6 +33,11 @@ export default function OpnameWorkspace({ sessionData, systemStock }: OpnameWork
   // Offline-first states
   const [isOnline, setIsOnline] = useState(true);
   const [showScanner, setShowScanner] = useState(false);
+  
+  // Review modal
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [reviewAction, setReviewAction] = useState<'APPROVE' | 'REJECT' | null>(null);
+  const [reviewNotes, setReviewNotes] = useState('');
   
   // Refs for scrolling to item
   const itemRefs = useRef<Record<string, HTMLTableRowElement | null>>({});
@@ -99,26 +108,19 @@ export default function OpnameWorkspace({ sessionData, systemStock }: OpnameWork
   const handleScanSuccess = (decodedText: string) => {
     setShowScanner(false);
     
-    // Find the product in systemStock that matches barcode or sku
     const matchedStock = systemStock.find(
       s => s.product.barcode === decodedText || s.product.sku === decodedText
     );
 
     if (matchedStock) {
-      // Set search to show only this item, or scroll to it
       setSearch(decodedText);
-      
-      // Auto-increment physical quantity if it makes sense, or just focus it
-      // Let's just highlight it for the user to input
       setTimeout(() => {
         const rowElement = itemRefs.current[matchedStock.product.id];
         if (rowElement) {
           rowElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          // Highlight effect
           rowElement.classList.add('bg-primary-50');
           setTimeout(() => rowElement.classList.remove('bg-primary-50'), 2000);
           
-          // Focus the input
           const inputEl = rowElement.querySelector('input[type="number"]') as HTMLInputElement;
           if (inputEl) inputEl.focus();
         }
@@ -166,6 +168,32 @@ export default function OpnameWorkspace({ sessionData, systemStock }: OpnameWork
       }
 
       await del(`opname_draft_${sessionId}`);
+      router.refresh();
+    } catch (e) {
+      alert('Terjadi kesalahan jaringan');
+      setIsSubmitting(false);
+    }
+  };
+
+  const submitReview = async () => {
+    if (!reviewAction) return;
+    setIsSubmitting(true);
+
+    try {
+      const res = await fetch(`/api/opname/${sessionId}/review`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: reviewAction, notes: reviewNotes }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        alert(err.error || 'Gagal mereview opname');
+        setIsSubmitting(false);
+        return;
+      }
+
+      setShowReviewModal(false);
       router.refresh();
     } catch (e) {
       alert('Terjadi kesalahan jaringan');
@@ -224,6 +252,7 @@ export default function OpnameWorkspace({ sessionData, systemStock }: OpnameWork
 
   const countedItemsCount = Object.keys(drafts).filter(k => typeof drafts[k]?.physicalQty === 'number').length;
   const totalItemsCount = isReadOnly ? sessionData.items.length : systemStock.length;
+  const hasDifferences = isReadOnly ? sessionData.items.some((i: any) => i.difference !== 0) : false;
 
   return (
     <div className="flex flex-col h-full bg-slate-50 relative">
@@ -232,6 +261,88 @@ export default function OpnameWorkspace({ sessionData, systemStock }: OpnameWork
           onScanSuccess={handleScanSuccess} 
           onClose={() => setShowScanner(false)} 
         />
+      )}
+
+      {/* Review Modal */}
+      {showReviewModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in">
+          <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl p-6">
+            <h3 className="text-lg font-bold text-slate-800 mb-2">
+              {reviewAction === 'APPROVE' ? 'Setujui Opname' : 'Tolak Opname'}
+            </h3>
+            <p className="text-sm text-slate-500 mb-4">
+              {reviewAction === 'APPROVE' 
+                ? 'Stok sistem akan otomatis disesuaikan dengan hasil hitung fisik staff.' 
+                : 'Sesi opname ini akan dikembalikan ke staff tanpa mengubah stok.'}
+            </p>
+            
+            <textarea
+              value={reviewNotes}
+              onChange={e => setReviewNotes(e.target.value)}
+              placeholder="Catatan untuk staff (opsional)..."
+              className="w-full h-24 p-3 rounded-xl border border-slate-200 focus:ring-4 focus:ring-primary-500/20 focus:border-primary-500 outline-none text-sm mb-5 resize-none"
+            ></textarea>
+
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setShowReviewModal(false)}
+                className="flex-1 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl hover:bg-slate-50 font-medium text-sm transition-colors"
+              >
+                Batal
+              </button>
+              <button 
+                onClick={submitReview}
+                disabled={isSubmitting}
+                className={`flex-1 py-2.5 text-white rounded-xl font-semibold text-sm transition-colors ${
+                  reviewAction === 'APPROVE' ? 'bg-green-600 hover:bg-green-500' : 'bg-red-600 hover:bg-red-500'
+                }`}
+              >
+                {isSubmitting ? 'Memproses...' : 'Konfirmasi'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Admin Review Banner */}
+      {canReview && (
+        <div className="bg-white border-b border-slate-200 px-6 py-4 flex flex-wrap items-center justify-between gap-4 shrink-0">
+          <div>
+            <h2 className="font-bold text-slate-800 flex items-center gap-2">
+              <span className="text-xl">👀</span> Menunggu Persetujuan Anda
+            </h2>
+            <p className="text-sm text-slate-500 mt-0.5">Terdapat selisih pada hasil hitung fisik yang membutuhkan persetujuan.</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={() => { setReviewAction('REJECT'); setShowReviewModal(true); }}
+              className="px-5 py-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-xl font-semibold text-sm transition-colors"
+            >
+              Tolak Hasil
+            </button>
+            <button 
+              onClick={() => { setReviewAction('APPROVE'); setShowReviewModal(true); }}
+              className="px-5 py-2 text-white bg-green-600 hover:bg-green-500 rounded-xl font-semibold text-sm transition-colors shadow-sm"
+            >
+              Setujui & Update Stok
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Review Notes Info Banner */}
+      {sessionData.reviewNotes && (sessionData.status === 'APPROVED' || sessionData.status === 'REJECTED') && (
+        <div className={`px-6 py-4 border-b shrink-0 flex items-start gap-3 ${
+          sessionData.status === 'APPROVED' ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'
+        }`}>
+          <span className="text-xl mt-0.5">💬</span>
+          <div>
+            <strong className="block text-sm mb-0.5">
+              Catatan {sessionData.status === 'APPROVED' ? 'Persetujuan' : 'Penolakan'} dari {sessionData.approvedBy?.name || 'Sistem'}:
+            </strong>
+            <span className="text-sm opacity-90">{sessionData.reviewNotes}</span>
+          </div>
+        </div>
       )}
 
       {/* Toolbar */}
@@ -331,7 +442,7 @@ export default function OpnameWorkspace({ sessionData, systemStock }: OpnameWork
                   <th className="px-6 py-4 font-semibold text-slate-600 text-right w-32">Stok Sistem</th>
                   <th className="px-6 py-4 font-semibold text-slate-600 text-center w-40">Fisik (Hitung)</th>
                   <th className="px-6 py-4 font-semibold text-slate-600 text-right w-32">Selisih</th>
-                  <th className="px-6 py-4 font-semibold text-slate-600 w-64">Catatan</th>
+                  <th className="px-6 py-4 font-semibold text-slate-600 w-64">Catatan Staff</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -339,7 +450,9 @@ export default function OpnameWorkspace({ sessionData, systemStock }: OpnameWork
                   <tr 
                     key={item.id} 
                     ref={el => { itemRefs.current[item.id] = el }}
-                    className="hover:bg-slate-50/50 transition-colors"
+                    className={`transition-colors ${
+                      item.difference !== 0 && isReadOnly ? 'bg-amber-50/30' : 'hover:bg-slate-50/50'
+                    }`}
                   >
                     <td className="px-6 py-4">
                       <div className="font-semibold text-slate-800">{item.name}</div>
