@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { db } from '@/lib/db';
 import { randomUUID } from 'crypto';
+import { logAudit } from '@/lib/audit';
 
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -72,6 +73,17 @@ export async function POST(req: NextRequest) {
             quantity: newQty,
           },
         });
+
+        // 3. Log Audit
+        await logAudit(
+          userId,
+          'CHECKOUT',
+          'StockMovement',
+          referenceId,
+          { quantity: currentQty },
+          { quantity: newQty },
+          tx
+        );
       }
     });
 

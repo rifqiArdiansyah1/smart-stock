@@ -30,7 +30,8 @@ export type AuditAction =
   | 'REJECT'
   | 'LOGIN'
   | 'LOGOUT'
-  | 'STOCK_ADJUSTMENT';
+  | 'STOCK_ADJUSTMENT'
+  | 'CHECKOUT';
 
 export type AuditEntityType =
   | 'User'
@@ -55,6 +56,32 @@ export async function writeAuditLog(entry: AuditEntry): Promise<void> {
       newValue: entry.newValue ? (entry.newValue as object) : undefined,
       ipAddress: entry.ipAddress,
       userAgent: entry.userAgent,
+    },
+  });
+}
+
+/**
+ * Utility untuk merekam Audit Log dalam Prisma Transaction.
+ */
+export async function logAudit(
+  actorId: string,
+  action: AuditAction,
+  entityType: AuditEntityType | string,
+  entityId: string,
+  oldValue: any = null,
+  newValue: any = null,
+  tx?: any
+) {
+  const prisma = tx || db;
+
+  return prisma.auditLog.create({
+    data: {
+      actorId,
+      action,
+      entityType,
+      entityId,
+      oldValue,
+      newValue,
     },
   });
 }

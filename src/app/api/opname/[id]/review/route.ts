@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { ROLES } from '@/lib/rbac';
 import { randomUUID } from 'crypto';
 import { NotificationType } from '@prisma/client';
+import { logAudit } from '@/lib/audit';
 
 export async function POST(req: NextRequest, ctx: any) {
   const session = await auth();
@@ -91,15 +92,15 @@ export async function POST(req: NextRequest, ctx: any) {
       }
 
       // 3. Log to AuditLog
-      await tx.auditLog.create({
-        data: {
-          actorId: userId,
-          action: action,
-          entityType: 'StockOpnameSession',
-          entityId: id,
-          newValue: { status: nextStatus, notes },
-        },
-      });
+      await logAudit(
+        userId,
+        action,
+        'StockOpnameSession',
+        id,
+        { status: 'PENDING_APPROVAL' },
+        { status: nextStatus, notes },
+        tx
+      );
 
       // 4. Send Notification to staff
       await tx.notification.create({
