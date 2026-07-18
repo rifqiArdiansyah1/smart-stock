@@ -1,0 +1,15 @@
+# Vercel will not upload these files/directories
+.git
+.github
+.env.local
+.env.*.local
+*.log
+node_modules
+prisma/migrations
+docs
+README.md
+*.test.ts
+*.spec.ts
+__tests__
+coverage
+.nyc_output
