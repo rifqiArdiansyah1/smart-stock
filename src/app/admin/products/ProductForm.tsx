@@ -1,7 +1,8 @@
 'use client';
 
-import { useActionState, useEffect } from 'react';
+import { useActionState, useEffect, useState } from 'react';
 import { createProduct, updateProduct } from './actions';
+import ImageUpload from '@/app/components/ImageUpload';
 
 type Product = {
   id: string;
@@ -13,6 +14,7 @@ type Product = {
   price: number;
   minStock: number;
   expiryDate?: string | Date | null;
+  imageUrl?: string | null;
 };
 
 interface ProductFormProps {
@@ -36,6 +38,7 @@ export default function ProductForm({ product, onClose }: ProductFormProps) {
   const isEdit = !!product;
   const action = isEdit ? updateProduct : createProduct;
   const [state, formAction, isPending] = useActionState(action, undefined);
+  const [imageUrl, setImageUrl] = useState<string>(product?.imageUrl || '');
 
   // Auto-close on success
   useEffect(() => {
@@ -202,6 +205,22 @@ export default function ProductForm({ product, onClose }: ProductFormProps) {
                 className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-4 focus:ring-primary-500/20 focus:border-primary-500 outline-none transition-all text-sm"
               />
               <p className="text-xs text-slate-400 mt-1">Kosongkan jika produk tidak memiliki tanggal kadaluarsa.</p>
+            </div>
+
+            {/* Foto Produk */}
+            <div className="col-span-2">
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                Foto Produk
+              </label>
+              {/* Hidden input agar imageUrl ikut ke Server Action */}
+              <input type="hidden" name="imageUrl" value={imageUrl} />
+              <ImageUpload
+                productId={product?.id || 'new'}
+                currentImageUrl={product?.imageUrl}
+                onUploadComplete={(url) => setImageUrl(url)}
+                onRemove={() => setImageUrl('')}
+                disabled={isPending}
+              />
             </div>
           </div>
 
