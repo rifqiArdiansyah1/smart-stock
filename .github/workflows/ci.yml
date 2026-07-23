@@ -54,13 +54,52 @@ jobs:
         run: npm run lint
 
   # ─────────────────────────────────────────────────────────────
-  # JOB 2: Build — Pastikan production build berhasil
+  # JOB 2: Test — Unit & Integration Tests
   # ─────────────────────────────────────────────────────────────
+  test:
+    name: 🧪 Unit & Integration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: validate
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Run tests with coverage
+        run: npm run test:coverage -- --ci --passWithNoTests
+        env:
+          CI: true
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-${{ github.sha }}
+          path: coverage/
+          retention-days: 7
+
+  # ─────────────────────────────────────────────────────────────
+  # JOB 3: Build — Pastikan production build berhasil
+  # ─────────────────────────────────────────────────────────────
+
   build:
     name: 🏗️ Build
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    needs: validate
+    needs: [validate, test]
 
     steps:
       - name: Checkout code
