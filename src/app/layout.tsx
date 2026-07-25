@@ -1,13 +1,30 @@
 import type { Metadata, Viewport } from 'next';
-import { Inter } from 'next/font/google';
+import { Sora, DM_Sans, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
 
-const inter = Inter({
+// ── Warehouse Signal Fonts ────────────────────────────────────────────────────
+const sora = Sora({
   subsets: ['latin'],
-  variable: '--font-inter',
+  weight: ['700'],
+  variable: '--font-display',
   display: 'swap',
 });
 
+const dmSans = DM_Sans({
+  subsets: ['latin'],
+  weight: ['400', '500'],
+  variable: '--font-body',
+  display: 'swap',
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ['latin'],
+  weight: ['500'],
+  variable: '--font-mono',
+  display: 'swap',
+});
+
+// ── SEO Metadata ──────────────────────────────────────────────────────────────
 export const metadata: Metadata = {
   title: {
     default: 'SmartStock — Manajemen Stok Cerdas',
@@ -25,10 +42,7 @@ export const metadata: Metadata = {
   ],
   authors: [{ name: 'Shenzen Studio' }],
   creator: 'Shenzen Studio',
-  robots: {
-    index: false, // Private app — jangan di-index search engine
-    follow: false,
-  },
+  robots: { index: false, follow: false },
   icons: {
     icon: '/favicon.ico',
     apple: '/apple-touch-icon.png',
@@ -41,18 +55,23 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#6366f1' },
-    { media: '(prefers-color-scheme: dark)', color: '#4f46e5' },
+    { media: '(prefers-color-scheme: light)', color: '#071639' },
+    { media: '(prefers-color-scheme: dark)', color: '#071639' },
   ],
 };
 
+// ── Root Layout ───────────────────────────────────────────────────────────────
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="id" className={inter.variable} suppressHydrationWarning>
+    <html
+      lang="id"
+      className={`${sora.variable} ${dmSans.variable} ${jetbrainsMono.variable}`}
+      suppressHydrationWarning
+    >
       <body className="min-h-screen antialiased">
         {children}
       </body>

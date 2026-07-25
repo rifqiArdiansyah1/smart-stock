@@ -1,0 +1,279 @@
+/**
+ * SmartStock — Warehouse Signal Design System
+ * CSS Custom Properties (design tokens) untuk seluruh aplikasi.
+ *
+ * Konsep: "Warehouse Signal" — industrial, high-contrast, utility-first.
+ * Semua halaman WAJIB menggunakan token ini. Tidak ada warna hard-coded.
+ */
+
+:root {
+  /* ────────────────────────────────────────────────
+     BRAND COLORS
+     ──────────────────────────────────────────────── */
+  --color-brand:           #071639;   /* Indigo sangat tua — sidebar, header */
+  --color-brand-hover:     #0d1f4a;   /* Hover state sidebar */
+  --color-brand-container: #1E2B4F;   /* Active item sidebar */
+  --color-brand-muted:     #2d3f6b;   /* Border dalam sidebar */
+  --color-brand-text:      #8693BD;   /* Teks sekunder di atas brand */
+
+  --color-accent:          #FEA619;   /* Amber — CTA utama, active state */
+  --color-accent-hover:    #E8940A;   /* Amber gelap hover */
+  --color-accent-dark:     #855300;   /* Teks di atas accent */
+  --color-accent-surface:  #FFF8E8;   /* Background amber sangat muda */
+
+  /* ────────────────────────────────────────────────
+     STATUS / INVENTORY HEALTH
+     ──────────────────────────────────────────────── */
+  --color-ok:              #10B981;   /* Hijau — stok aman */
+  --color-ok-surface:      #ECFDF5;   /* Background hijau muda */
+  --color-ok-text:         #065F46;   /* Teks hijau gelap */
+
+  --color-warn:            #F97316;   /* Oranye — stok menipis */
+  --color-warn-surface:    #FFF7ED;   /* Background oranye muda */
+  --color-warn-text:       #9A3412;   /* Teks oranye gelap */
+
+  --color-critical:        #EF4444;   /* Merah — stok kritis / selisih */
+  --color-critical-surface:#FEF2F2;   /* Background merah muda */
+  --color-critical-text:   #991B1B;   /* Teks merah gelap */
+
+  --color-expired:         #93000A;   /* Merah sangat gelap — kedaluwarsa */
+  --color-expired-surface: #FFDAD6;   /* Background expired muda */
+
+  /* ────────────────────────────────────────────────
+     SURFACE / BACKGROUND
+     ──────────────────────────────────────────────── */
+  --color-surface:         #F8F9FB;   /* Background halaman utama */
+  --color-surface-low:     #F2F4F6;   /* Background sedikit lebih gelap */
+  --color-card:            #FFFFFF;   /* Card, panel, modal */
+  --color-card-hover:      #FAFBFC;   /* Card hover */
+
+  /* ────────────────────────────────────────────────
+     BORDER
+     ──────────────────────────────────────────────── */
+  --color-border:          #E2E6EF;   /* Garis batas utama */
+  --color-border-muted:    #C6C6CF;   /* Garis batas lebih tebal */
+  --color-border-focus:    #071639;   /* Focus ring — indigo */
+
+  /* ────────────────────────────────────────────────
+     TEXT
+     ──────────────────────────────────────────────── */
+  --color-text-primary:    #111827;   /* Teks utama */
+  --color-text-secondary:  #6B7280;   /* Label, caption, helper */
+  --color-text-disabled:   #9CA3AF;   /* Disabled state */
+  --color-text-on-brand:   #FFFFFF;   /* Teks di atas brand gelap */
+  --color-text-on-accent:  #1C0E00;   /* Teks di atas amber */
+
+  /* ────────────────────────────────────────────────
+     TYPOGRAPHY — font families
+     ──────────────────────────────────────────────── */
+  --font-display: 'Sora', sans-serif;         /* Heading, display */
+  --font-body:    'DM Sans', sans-serif;      /* Body, label, UI */
+  --font-mono:    'JetBrains Mono', monospace; /* Angka, SKU, log */
+
+  /* ────────────────────────────────────────────────
+     TYPOGRAPHY — sizes (4px base rhythm)
+     ──────────────────────────────────────────────── */
+  --text-xs:    0.75rem;    /* 12px */
+  --text-sm:    0.875rem;   /* 14px */
+  --text-base:  1rem;       /* 16px */
+  --text-lg:    1.125rem;   /* 18px */
+  --text-xl:    1.25rem;    /* 20px */
+  --text-2xl:   1.5rem;     /* 24px */
+  --text-3xl:   1.875rem;   /* 30px */
+  --text-4xl:   2.25rem;    /* 36px */
+
+  /* Line heights */
+  --leading-tight:  1.25;
+  --leading-snug:   1.375;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.625;
+
+  /* ────────────────────────────────────────────────
+     SPACING (4px base)
+     ──────────────────────────────────────────────── */
+  --space-1:   0.25rem;   /* 4px */
+  --space-2:   0.5rem;    /* 8px */
+  --space-3:   0.75rem;   /* 12px */
+  --space-4:   1rem;      /* 16px */
+  --space-6:   1.5rem;    /* 24px */
+  --space-8:   2rem;      /* 32px */
+  --space-12:  3rem;      /* 48px */
+  --space-16:  4rem;      /* 64px */
+
+  /* Layout-specific */
+  --space-margin-mobile:  1.25rem;   /* 20px — side margin mobile */
+  --touch-target:         3rem;      /* 48px — minimum tap area */
+  --touch-target-lg:      4rem;      /* 64px — large tap area */
+
+  /* ────────────────────────────────────────────────
+     BORDER RADIUS
+     ──────────────────────────────────────────────── */
+  --radius-sm:   0.25rem;   /* 4px */
+  --radius-md:   0.5rem;    /* 8px — buttons, inputs */
+  --radius-lg:   0.75rem;   /* 12px — cards */
+  --radius-xl:   1rem;      /* 16px — modals */
+  --radius-2xl:  1.5rem;    /* 24px — bottom sheets */
+  --radius-full: 9999px;    /* pill — status badges */
+
+  /* ────────────────────────────────────────────────
+     SHADOWS (tonal, industrial look)
+     ──────────────────────────────────────────────── */
+  --shadow-sm:     0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md:     0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  --shadow-lg:     0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-modal:  0 20px 60px -10px rgb(0 0 0 / 0.25);
+  --shadow-sidebar: 2px 0 8px 0 rgb(0 0 0 / 0.12);
+
+  /* ────────────────────────────────────────────────
+     LAYOUT DIMENSIONS
+     ──────────────────────────────────────────────── */
+  --sidebar-width:          15rem;    /* 240px */
+  --sidebar-width-collapsed: 4rem;   /* 64px */
+  --topbar-height:           3.5rem;  /* 56px */
+  --bottomnav-height:        4rem;    /* 64px */
+
+  /* Breakpoints (untuk referensi JS/CSS) */
+  --bp-sm:   375px;
+  --bp-md:   768px;
+  --bp-lg:   1280px;
+  --bp-xl:   1440px;
+
+  /* ────────────────────────────────────────────────
+     TRANSITIONS
+     ──────────────────────────────────────────────── */
+  --duration-fast:    150ms;
+  --duration-normal:  200ms;
+  --duration-slow:    250ms;
+  --ease-out:         cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out:      cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ── Typography Utility Classes ── */
+.font-display {
+  font-family: var(--font-display);
+}
+.font-body {
+  font-family: var(--font-body);
+}
+.font-data {
+  font-family: var(--font-mono);
+  letter-spacing: 0.02em;
+}
+
+/* Heading scale */
+.text-display-lg {
+  font-family: var(--font-display);
+  font-size: var(--text-4xl);
+  font-weight: 700;
+  line-height: var(--leading-tight);
+  letter-spacing: -0.02em;
+}
+.text-display-md {
+  font-family: var(--font-display);
+  font-size: var(--text-3xl);
+  font-weight: 700;
+  line-height: var(--leading-tight);
+  letter-spacing: -0.02em;
+}
+.text-heading-lg {
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  line-height: var(--leading-snug);
+}
+.text-heading-md {
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: 700;
+  line-height: var(--leading-snug);
+}
+.text-heading-sm {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 700;
+  line-height: var(--leading-snug);
+}
+
+/* Body scale */
+.text-body-lg {
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  font-weight: 400;
+  line-height: var(--leading-normal);
+}
+.text-body-md {
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: 400;
+  line-height: var(--leading-normal);
+}
+.text-body-sm {
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  font-weight: 400;
+  line-height: var(--leading-normal);
+}
+
+/* Mono data */
+.text-data-lg {
+  font-family: var(--font-mono);
+  font-size: var(--text-base);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+.text-data-md {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+.text-data-sm {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+/* ── Animations ── */
+@keyframes ws-fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes ws-slide-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes ws-scale-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes ws-shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes ws-scan-flash {
+  0%, 100% { background-color: transparent; }
+  50%       { background-color: var(--color-ok-surface); }
+}
+
+.animate-ws-fade-in    { animation: ws-fade-in var(--duration-fast) var(--ease-out) both; }
+.animate-ws-slide-up   { animation: ws-slide-up var(--duration-slow) var(--ease-out) both; }
+.animate-ws-scale-in   { animation: ws-scale-in var(--duration-normal) var(--ease-out) both; }
+.animate-ws-scan-flash { animation: ws-scan-flash var(--duration-normal) ease; }
+
+/* Skeleton shimmer */
+.ws-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-surface-low) 25%,
+    var(--color-surface) 50%,
+    var(--color-surface-low) 75%
+  );
+  background-size: 200% 100%;
+  animation: ws-shimmer 1.5s infinite;
+  border-radius: var(--radius-md);
+}
