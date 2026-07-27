@@ -1,87 +1,238 @@
 'use client';
 
-import { useActionState } from 'react';
+import { useActionState, useState } from 'react';
 import { authenticate } from './actions';
 
+// ── Icons ─────────────────────────────────────────────────────────────────────
+const EmailIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+  </svg>
+);
+
+const LockIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+  </svg>
+);
+
+const EyeIcon = ({ show }: { show: boolean }) => show ? (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+    <line x1="1" y1="1" x2="23" y2="23"/>
+  </svg>
+) : (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+  </svg>
+);
+
+const ArrowIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
+  </svg>
+);
+
+const SpinnerIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ animation: 'spin 0.75s linear infinite' }}>
+    <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    <circle cx="12" cy="12" r="9" stroke="currentColor" strokeOpacity="0.3" strokeWidth="2.5"/>
+    <path d="M12 3a9 9 0 0 1 9 9" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/>
+  </svg>
+);
+
+// ── Input styles ──────────────────────────────────────────────────────────────
+const inputBase: React.CSSProperties = {
+  width:           '100%',
+  height:          'var(--touch-target)',   /* 48px */
+  padding:         '0 0.75rem 0 2.75rem',
+  fontFamily:      'var(--font-body)',
+  fontSize:        'var(--text-base)',
+  color:           'var(--color-text-primary)',
+  backgroundColor: 'var(--color-surface)',
+  border:          '1px solid var(--color-border)',
+  borderRadius:    'var(--radius-lg)',
+  outline:         'none',
+  transition:      'border-color 150ms ease, box-shadow 150ms ease',
+};
+
+// ── Component ─────────────────────────────────────────────────────────────────
 export default function LoginForm() {
-  const [errorMessage, formAction, isPending] = useActionState(
-    authenticate,
-    undefined,
-  );
+  const [errorMessage, formAction, isPending] = useActionState(authenticate, undefined);
+  const [showPassword, setShowPassword] = useState(false);
+  const [emailFocus, setEmailFocus]     = useState(false);
+  const [passFocus,  setPassFocus]      = useState(false);
 
   return (
-    <form action={formAction} className="space-y-5">
-      {/* Email Input */}
-      <div>
+    <form action={formAction}>
+      {/* ── Email ── */}
+      <div style={{ marginBottom: 'var(--space-6)' }}>
         <label
           htmlFor="email"
-          className="block text-sm font-medium text-surface-700 mb-1"
+          style={{
+            display:    'block',
+            fontFamily: 'var(--font-mono)',
+            fontSize:   'var(--text-sm)',
+            fontWeight: 500,
+            color:      'var(--color-text-secondary)',
+            marginBottom: 'var(--space-2)',
+          }}
         >
-          Email
+          Email Operator
         </label>
-        <input
-          id="email"
-          name="email"
-          type="email"
-          placeholder="admin@smartstock.app"
-          required
-          autoComplete="email"
-          className="w-full px-4 py-3 rounded-xl border border-surface-200 bg-white/50 
-                     focus:bg-white focus:border-primary-500 focus:ring-4 focus:ring-primary-500/20 
-                     transition-all duration-200 outline-none text-surface-900 placeholder-surface-400"
-        />
+        <div style={{ position: 'relative' }}>
+          <span style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-secondary)', display: 'flex', pointerEvents: 'none' }}>
+            <EmailIcon />
+          </span>
+          <input
+            id="email"
+            name="email"
+            type="email"
+            placeholder="operator@warehouse.com"
+            required
+            autoComplete="email"
+            aria-required="true"
+            aria-label="Masukkan Email Operator"
+            style={{
+              ...inputBase,
+              borderColor: emailFocus ? 'var(--color-brand)' : 'var(--color-border)',
+              boxShadow:   emailFocus ? '0 0 0 3px rgba(7,22,57,0.1)' : 'none',
+            }}
+            onFocus={() => setEmailFocus(true)}
+            onBlur={() => setEmailFocus(false)}
+          />
+        </div>
       </div>
 
-      {/* Password Input */}
-      <div>
+      {/* ── Password ── */}
+      <div style={{ marginBottom: 'var(--space-6)' }}>
         <label
           htmlFor="password"
-          className="block text-sm font-medium text-surface-700 mb-1"
+          style={{
+            display:    'block',
+            fontFamily: 'var(--font-mono)',
+            fontSize:   'var(--text-sm)',
+            fontWeight: 500,
+            color:      'var(--color-text-secondary)',
+            marginBottom: 'var(--space-2)',
+          }}
         >
-          Password
+          Kata Sandi
         </label>
-        <input
-          id="password"
-          name="password"
-          type="password"
-          placeholder="••••••••"
-          required
-          autoComplete="current-password"
-          className="w-full px-4 py-3 rounded-xl border border-surface-200 bg-white/50 
-                     focus:bg-white focus:border-primary-500 focus:ring-4 focus:ring-primary-500/20 
-                     transition-all duration-200 outline-none text-surface-900 placeholder-surface-400"
-        />
+        <div style={{ position: 'relative' }}>
+          <span style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-secondary)', display: 'flex', pointerEvents: 'none' }}>
+            <LockIcon />
+          </span>
+          <input
+            id="password"
+            name="password"
+            type={showPassword ? 'text' : 'password'}
+            placeholder="••••••••"
+            required
+            autoComplete="current-password"
+            aria-required="true"
+            aria-label="Masukkan Kata Sandi"
+            style={{
+              ...inputBase,
+              padding:     '0 2.75rem',
+              borderColor: passFocus ? 'var(--color-brand)' : 'var(--color-border)',
+              boxShadow:   passFocus ? '0 0 0 3px rgba(7,22,57,0.1)' : 'none',
+            }}
+            onFocus={() => setPassFocus(true)}
+            onBlur={() => setPassFocus(false)}
+          />
+          {/* Toggle visibility */}
+          <button
+            type="button"
+            onClick={() => setShowPassword(!showPassword)}
+            aria-label={showPassword ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi'}
+            style={{
+              position:  'absolute',
+              right:     '0.75rem',
+              top:       '50%',
+              transform: 'translateY(-50%)',
+              background: 'none',
+              border:    'none',
+              cursor:    'pointer',
+              color:     'var(--color-text-secondary)',
+              display:   'flex',
+              padding:   '4px',
+              borderRadius: 'var(--radius-sm)',
+            }}
+          >
+            <EyeIcon show={showPassword} />
+          </button>
+        </div>
       </div>
 
-      {/* Error Message */}
+      {/* ── Error Message ── */}
       {errorMessage && (
-        <div className="p-3 rounded-xl bg-danger-50 border border-danger-100 text-danger-600 text-sm flex items-start gap-2 animate-in fade-in slide-in-from-top-2">
-          <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        <div
+          role="alert"
+          aria-live="polite"
+          style={{
+            display:         'flex',
+            alignItems:      'flex-start',
+            gap:             'var(--space-2)',
+            padding:         'var(--space-3)',
+            marginBottom:    'var(--space-4)',
+            backgroundColor: 'var(--color-critical-surface)',
+            border:          '1px solid var(--color-critical)',
+            borderRadius:    'var(--radius-md)',
+            color:           'var(--color-critical-text)',
+            fontFamily:      'var(--font-body)',
+            fontSize:        'var(--text-sm)',
+            animation:       'ws-slide-up var(--duration-slow) var(--ease-out)',
+          }}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0, marginTop: '1px' }}>
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
           </svg>
           <span>{errorMessage}</span>
         </div>
       )}
 
-      {/* Submit Button */}
+      {/* ── CTA Button ── */}
       <button
         type="submit"
+        id="btn-login"
         disabled={isPending}
-        className="relative w-full flex justify-center items-center py-3 px-4 border border-transparent text-sm font-semibold rounded-xl text-white bg-primary-600 hover:bg-primary-500 focus:outline-none focus:ring-4 focus:ring-primary-500/30 shadow-md shadow-primary-500/20 transition-all duration-200 disabled:opacity-70 disabled:cursor-not-allowed group overflow-hidden"
+        aria-busy={isPending}
+        aria-label="Tombol Masuk"
+        style={{
+          width:           '100%',
+          height:          'var(--touch-target)',
+          display:         'flex',
+          alignItems:      'center',
+          justifyContent:  'center',
+          gap:             'var(--space-2)',
+          backgroundColor: isPending ? 'var(--color-accent-hover)' : 'var(--color-accent)',
+          color:           'var(--color-text-on-accent)',
+          border:          'none',
+          borderRadius:    'var(--radius-lg)',
+          fontFamily:      'var(--font-display)',
+          fontSize:        'var(--text-lg)',
+          fontWeight:      700,
+          cursor:          isPending ? 'not-allowed' : 'pointer',
+          opacity:         isPending ? 0.8 : 1,
+          transition:      'background-color 150ms ease, transform 150ms ease',
+          boxShadow:       '0 2px 8px rgba(254,166,25,0.35)',
+        }}
+        onMouseEnter={(e) => { if (!isPending) e.currentTarget.style.backgroundColor = 'var(--color-accent-hover)'; }}
+        onMouseLeave={(e) => { if (!isPending) e.currentTarget.style.backgroundColor = 'var(--color-accent)'; }}
+        onMouseDown={(e) => { if (!isPending) e.currentTarget.style.transform = 'scale(0.98)'; }}
+        onMouseUp={(e) => { e.currentTarget.style.transform = ''; }}
       >
-        {/* Hover Gradient Overlay */}
-        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 ease-out"></div>
-        
         {isPending ? (
-          <div className="flex items-center gap-2">
-            <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
+          <>
+            <SpinnerIcon />
             <span>Memverifikasi...</span>
-          </div>
+          </>
         ) : (
-          <span>Masuk ke Sistem</span>
+          <>
+            <span>Masuk</span>
+            <ArrowIcon />
+          </>
         )}
       </button>
     </form>
