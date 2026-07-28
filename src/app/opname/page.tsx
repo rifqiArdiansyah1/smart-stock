@@ -1,35 +1,35 @@
-/**
- * Opname Page (Pilih Lokasi) — Warehouse Signal (Mobile)
- * Referensi: stitch_web_application_ui_ux_design/pilih_lokasi_smartstock/screen.png
- *
- * Step 1 dari alur opname: pilih lokasi/rak/zona
- */
-
 import { Metadata } from 'next';
 import { auth } from '@/auth';
 import { redirect } from 'next/navigation';
 import { db } from '@/lib/db';
-import PilihLokasiClient from './PilihLokasiClient';
+import OpnameClient from './OpnameClient';
 
 export const metadata: Metadata = {
-  title: 'Mulai Opname',
-  description: 'Pilih lokasi untuk memulai stock opname',
+  title: 'Stock Opname',
+  description: 'Mulai dan kelola sesi stock opname',
 };
 
 export default async function OpnamePage() {
   const session = await auth();
   if (!session?.user) redirect('/login');
 
-  const locations = await db.location.findMany({
-    where:   { isActive: true },
-    orderBy: { name: 'asc' },
-    select:  {
-      id:   true,
-      name: true,
-      type: true,
-      _count: { select: { stockLevels: true } },
-    },
-  });
+  const [opnames, locations] = await Promise.all([
+    db.stockOpnameSession.findMany({
+      orderBy: { startedAt: 'desc' },
+      include: {
+        location: { select: { name: true, type: true } },
+        startedBy: { select: { name: true } },
+        approvedBy: { select: { name: true } },
+        _count: { select: { items: true } },
+      },
+    }),
+    db.location.findMany({
+      where: { isActive: true },
+      orderBy: { name: 'asc' },
+      select: { id: true, name: true, type: true },
+    }),
+  ]);
 
-  return <PilihLokasiClient locations={locations as any[]} />;
+  return <OpnameClient initialOpnames={opnames as any[]} locations={locations} />;
 }
+
