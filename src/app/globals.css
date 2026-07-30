@@ -1,6 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Sora:wght@700&family=DM+Sans:wght@400;500&family=JetBrains+Mono:wght@500&display=swap');
 @import 'tailwindcss';
 @import '../styles/design-system.css';
+@import '../styles/products.css';
 
 /* =============================================
    SmartStock — Global CSS
