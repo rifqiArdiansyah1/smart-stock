@@ -1,5 +1,12 @@
+/**
+ * page.tsx — Laporan Selisih Stok
+ *
+ * Server Component: auth + render DiscrepancyReport client
+ * Redesign: ISSUE-029-D6
+ */
+
 import { Metadata } from 'next';
-import { auth } from '@/auth';
+import { auth }     from '@/auth';
 import { redirect } from 'next/navigation';
 import DiscrepancyReport from './DiscrepancyReport';
 
@@ -16,23 +23,19 @@ export default async function DiscrepancyReportPage() {
   if (role !== 'OWNER' && role !== 'ADMIN') redirect('/');
 
   return (
-    <main className="min-h-screen bg-slate-50">
-      <header className="bg-white border-b border-slate-200 px-6 py-5">
-        <div className="max-w-screen-xl mx-auto">
-          <div className="flex items-center gap-2 text-sm text-slate-400 mb-1">
-            <a href="/admin/dashboard" className="hover:text-slate-600 transition-colors">Dashboard</a>
-            <span>/</span>
-            <span className="text-slate-600 font-medium">Laporan Selisih Stok</span>
-          </div>
-          <h1 className="text-2xl font-bold text-slate-900">📉 Laporan Selisih Stok</h1>
-          <p className="text-slate-500 text-sm mt-1">
+    <div className="ss-page-audit">
+      {/* ── Page Header ── */}
+      <div className="ss-audit-header">
+        <div>
+          <h2 className="ss-audit-title">Laporan Selisih Stok</h2>
+          <p className="ss-audit-subtitle">
             Analisis produk yang paling sering mengalami selisih dan estimasi nilai kerugiannya.
           </p>
         </div>
-      </header>
-      <div className="max-w-screen-xl mx-auto px-6 py-6">
-        <DiscrepancyReport />
       </div>
-    </main>
+
+      {/* ── Report Client Component ── */}
+      <DiscrepancyReport />
+    </div>
   );
 }

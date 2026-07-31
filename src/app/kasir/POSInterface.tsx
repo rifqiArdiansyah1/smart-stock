@@ -1,3 +1,15 @@
+/**
+ * POSInterface.tsx — POS Kasir Client Component
+ *
+ * Redesign per ISSUE-029-D6:
+ * - Split layout: produk kiri (scan + cart) | ringkasan kanan
+ * - CTA amber besar "Bayar Sekarang"
+ * - Mobile: stacked (produk atas, summary bawah)
+ * - Location selector screen sebelum masuk POS
+ *
+ * Design ref: stitch — Warehouse Signal Design System
+ */
+
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
@@ -13,31 +25,33 @@ type CartItem = {
   price: number;
   quantity: number;
   unit: string;
-  stockAvailable: number; // Max allowed
+  stockAvailable: number;
 };
 
 interface POSInterfaceProps {
   locations: Location[];
 }
 
+function formatCurrency(v: number): string {
+  return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(v);
+}
+
 export default function POSInterface({ locations }: POSInterfaceProps) {
   const [locationId, setLocationId] = useState<string>('');
-  const [cart, setCart] = useState<CartItem[]>([]);
+  const [cart, setCart]             = useState<CartItem[]>([]);
   const [barcodeInput, setBarcodeInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading]   = useState(false);
   const [isCheckout, setIsCheckout] = useState(false);
   const [receiptData, setReceiptData] = useState<any>(null);
-  const [errorMsg, setErrorMsg] = useState('');
+  const [errorMsg, setErrorMsg]     = useState('');
 
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Auto focus barcode input when location is selected
   useEffect(() => {
-    if (locationId && inputRef.current) {
-      inputRef.current.focus();
-    }
+    if (locationId && inputRef.current) inputRef.current.focus();
   }, [locationId]);
 
+  /* ── Product lookup ── */
   const handleLookup = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!barcodeInput.trim() || !locationId) return;
@@ -45,17 +59,16 @@ export default function POSInterface({ locations }: POSInterfaceProps) {
     setIsLoading(true);
     setErrorMsg('');
     const query = barcodeInput.trim();
-    setBarcodeInput(''); // clear immediately for next scan
+    setBarcodeInput('');
 
     try {
-      const res = await fetch(`/api/pos/lookup?q=${encodeURIComponent(query)}&locationId=${locationId}`);
+      const res  = await fetch(`/api/pos/lookup?q=${encodeURIComponent(query)}&locationId=${locationId}`);
       const data = await res.json();
 
       if (!res.ok) {
         setErrorMsg(data.error || 'Gagal mencari produk');
         return;
       }
-
       if (data.stockAvailable <= 0) {
         setErrorMsg(`Stok ${data.product.name} kosong di lokasi ini.`);
         return;
@@ -65,31 +78,28 @@ export default function POSInterface({ locations }: POSInterfaceProps) {
         const existing = prev.find((i) => i.productId === data.product.id);
         if (existing) {
           if (existing.quantity >= data.stockAvailable) {
-            setErrorMsg(`Maksimal stok ${data.product.name} tercapai (${data.stockAvailable}).`);
+            setErrorMsg(`Maksimal stok ${data.product.name}: ${data.stockAvailable}.`);
             return prev;
           }
           return prev.map((i) =>
-            i.productId === data.product.id
-              ? { ...i, quantity: i.quantity + 1 }
-              : i
+            i.productId === data.product.id ? { ...i, quantity: i.quantity + 1 } : i
           );
         }
-
         return [
           ...prev,
           {
-            productId: data.product.id,
-            sku: data.product.sku,
-            barcode: data.product.barcode,
-            name: data.product.name,
-            price: data.product.price,
-            unit: data.product.unit,
-            quantity: 1,
+            productId:      data.product.id,
+            sku:            data.product.sku,
+            barcode:        data.product.barcode,
+            name:           data.product.name,
+            price:          data.product.price,
+            unit:           data.product.unit,
+            quantity:       1,
             stockAvailable: data.stockAvailable,
           },
         ];
       });
-    } catch (err) {
+    } catch {
       setErrorMsg('Terjadi kesalahan jaringan.');
     } finally {
       setIsLoading(false);
@@ -97,15 +107,12 @@ export default function POSInterface({ locations }: POSInterfaceProps) {
     }
   };
 
-  const updateQuantity = (productId: string, delta: number) => {
+  const updateQty = (productId: string, delta: number) => {
     setCart((prev) =>
       prev.map((i) => {
-        if (i.productId === productId) {
-          const newQty = i.quantity + delta;
-          if (newQty > 0 && newQty <= i.stockAvailable) {
-            return { ...i, quantity: newQty };
-          }
-        }
+        if (i.productId !== productId) return i;
+        const newQty = i.quantity + delta;
+        if (newQty > 0 && newQty <= i.stockAvailable) return { ...i, quantity: newQty };
         return i;
       })
     );
@@ -115,6 +122,7 @@ export default function POSInterface({ locations }: POSInterfaceProps) {
     setCart((prev) => prev.filter((i) => i.productId !== productId));
   };
 
+  /* ── Checkout ── */
   const handleCheckout = async () => {
     if (cart.length === 0 || !locationId) return;
     setIsCheckout(true);
@@ -122,212 +130,235 @@ export default function POSInterface({ locations }: POSInterfaceProps) {
 
     try {
       const res = await fetch('/api/pos/checkout', {
-        method: 'POST',
+        method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body:    JSON.stringify({
           locationId,
-          items: cart.map(i => ({
+          items: cart.map((i) => ({
             productId: i.productId,
-            quantity: i.quantity,
-            price: i.price,
-            name: i.name
+            quantity:  i.quantity,
+            price:     i.price,
+            name:      i.name,
           })),
         }),
       });
-
       const data = await res.json();
       if (!res.ok) {
         setErrorMsg(data.error || 'Gagal memproses transaksi.');
         return;
       }
 
-      // Success
-      const locationName = locations.find(l => l.id === locationId)?.name || '';
+      const locationName = locations.find((l) => l.id === locationId)?.name || '';
       setReceiptData({
         referenceId: data.referenceId,
-        date: new Date(),
+        date:        new Date(),
         locationName,
-        items: [...cart],
-        total: cart.reduce((sum, item) => sum + item.price * item.quantity, 0),
+        items:       [...cart],
+        total:       cart.reduce((sum, item) => sum + item.price * item.quantity, 0),
       });
-      
       setCart([]);
-    } catch (err) {
+    } catch {
       setErrorMsg('Terjadi kesalahan saat memproses checkout.');
     } finally {
       setIsCheckout(false);
     }
   };
 
-  const totalAmount = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const totalAmount = cart.reduce((sum, i) => sum + i.price * i.quantity, 0);
+  const totalItems  = cart.reduce((sum, i) => sum + i.quantity, 0);
+  const locationName = locations.find((l) => l.id === locationId)?.name ?? '';
 
+  /* ── Location Picker Screen ── */
   if (!locationId) {
     return (
-      <div className="flex-1 flex items-center justify-center p-6 bg-slate-50 h-full">
-        <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 max-w-md w-full text-center animate-in fade-in zoom-in-95 duration-300">
-          <div className="text-5xl mb-4">🏪</div>
-          <h2 className="text-xl font-bold text-slate-800 mb-2">Pilih Lokasi Kasir</h2>
-          <p className="text-sm text-slate-500 mb-6">Pilih lokasi penjualan untuk mengurangi stok dengan benar dari sistem.</p>
-          <select
-            value={locationId}
-            onChange={(e) => setLocationId(e.target.value)}
-            className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-4 focus:ring-primary-500/20 focus:border-primary-500 outline-none transition-all text-sm font-medium bg-slate-50"
-          >
-            <option value="" disabled>-- Pilih Lokasi --</option>
-            {locations.map((l) => (
-              <option key={l.id} value={l.id}>{l.name} ({l.type})</option>
-            ))}
-          </select>
+      <div className="ss-pos-location-screen">
+        <div className="ss-pos-location-card">
+          <span className="material-symbols-outlined ss-pos-location-icon"
+            style={{ fontVariationSettings: "'FILL' 1" }}>
+            storefront
+          </span>
+          <h2 className="ss-pos-location-title">Pilih Lokasi Kasir</h2>
+          <p className="ss-pos-location-desc">
+            Pilih lokasi penjualan untuk mengurangi stok dari sistem secara akurat.
+          </p>
+          <div className="ss-pos-location-select-wrap">
+            <select
+              id="pos-location-select"
+              value={locationId}
+              onChange={(e) => setLocationId(e.target.value)}
+              className="ss-pos-location-select"
+              aria-label="Pilih lokasi kasir"
+            >
+              <option value="" disabled>-- Pilih Lokasi --</option>
+              {locations.map((l) => (
+                <option key={l.id} value={l.id}>{l.name} ({l.type})</option>
+              ))}
+            </select>
+            <span className="material-symbols-outlined ss-pos-location-select-icon">expand_more</span>
+          </div>
         </div>
       </div>
     );
   }
 
+  /* ── Main POS Interface ── */
   return (
-    <div className="flex h-full bg-slate-50">
-      {/* Left Panel: Barcode Scan & Cart */}
-      <div className="flex-1 flex flex-col border-r border-slate-200 bg-white">
+    <div className="ss-pos-main">
+      {/* ── LEFT: Scan + Cart ── */}
+      <div className="ss-pos-left">
         {/* Search Bar */}
-        <div className="p-4 border-b border-slate-100 bg-slate-50/50">
-          <form onSubmit={handleLookup} className="relative">
-            <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
-            </svg>
+        <div className="ss-pos-search-wrap">
+          <form onSubmit={handleLookup} className="ss-pos-search-form">
+            <span className="material-symbols-outlined ss-pos-search-icon">barcode_scanner</span>
             <input
+              id="pos-barcode-input"
               ref={inputRef}
               type="text"
-              placeholder="Scan barcode atau ketik SKU lalu tekan Enter..."
+              placeholder="Scan barcode atau ketik SKU, lalu tekan Enter..."
               value={barcodeInput}
               onChange={(e) => setBarcodeInput(e.target.value)}
-              className="w-full pl-12 pr-4 py-3.5 rounded-xl border border-slate-200 bg-white shadow-sm focus:ring-4 focus:ring-primary-500/20 focus:border-primary-500 outline-none transition-all font-medium text-slate-700"
+              className="ss-pos-search-input"
               autoFocus
+              autoComplete="off"
               disabled={isLoading}
+              aria-label="Scan barcode atau ketik SKU"
             />
-            {isLoading && (
-              <div className="absolute right-4 top-1/2 -translate-y-1/2">
-                <div className="w-5 h-5 border-2 border-primary-500 border-t-transparent rounded-full animate-spin"></div>
-              </div>
-            )}
+            {isLoading && <div className="ss-pos-search-spinner" />}
           </form>
+
           {errorMsg && (
-            <div className="mt-3 text-sm text-red-600 bg-red-50 p-2.5 rounded-lg border border-red-100 flex items-center gap-2">
-              <span className="text-base">⚠️</span> {errorMsg}
+            <div className="ss-pos-error-banner" role="alert">
+              <span className="material-symbols-outlined">warning</span>
+              {errorMsg}
             </div>
           )}
         </div>
 
-        {/* Cart List */}
-        <div className="flex-1 overflow-y-auto p-4 bg-slate-50/30">
+        {/* Cart */}
+        <div className="ss-pos-cart">
           {cart.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-slate-400">
-              <span className="text-6xl mb-4">🛒</span>
-              <p className="font-medium text-slate-600 text-lg">Keranjang Kosong</p>
-              <p className="text-sm mt-1 max-w-xs text-center">Scan produk untuk menambahkan ke keranjang belanja.</p>
+            <div className="ss-pos-cart-empty">
+              <span className="material-symbols-outlined ss-pos-cart-empty-icon">shopping_cart</span>
+              <p className="ss-pos-cart-empty-title">Keranjang Kosong</p>
+              <p className="ss-pos-cart-empty-desc">
+                Scan produk untuk menambahkan ke keranjang belanja.
+              </p>
             </div>
           ) : (
-            <div className="space-y-3">
-              {cart.map((item) => (
-                <div key={item.productId} className="flex items-center gap-4 p-4 bg-white border border-slate-200 rounded-2xl shadow-sm">
-                  <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center text-xl shrink-0">
-                    📦
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h4 className="font-bold text-slate-800 text-sm truncate">{item.name}</h4>
-                    <p className="text-xs text-slate-400 font-mono mt-0.5">{item.sku}</p>
-                    <p className="font-semibold text-primary-600 text-sm mt-1">Rp {item.price.toLocaleString('id-ID')}</p>
-                  </div>
-                  
-                  {/* Quantity Control */}
-                  <div className="flex items-center gap-3 bg-slate-50 px-2 py-1.5 rounded-xl border border-slate-200">
-                    <button 
-                      onClick={() => updateQuantity(item.productId, -1)}
-                      className="w-7 h-7 flex items-center justify-center bg-white rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-50 transition-colors"
-                      disabled={item.quantity <= 1}
-                    >
-                      -
-                    </button>
-                    <span className="text-sm font-bold w-6 text-center">{item.quantity}</span>
-                    <button 
-                      onClick={() => updateQuantity(item.productId, 1)}
-                      className="w-7 h-7 flex items-center justify-center bg-white rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-50 transition-colors"
-                      disabled={item.quantity >= item.stockAvailable}
-                    >
-                      +
-                    </button>
-                  </div>
-
-                  <div className="text-right min-w-[100px]">
-                    <p className="font-bold text-slate-800 text-base">
-                      Rp {(item.price * item.quantity).toLocaleString('id-ID')}
-                    </p>
-                  </div>
-
-                  <button 
-                    onClick={() => removeItem(item.productId)}
-                    className="w-9 h-9 flex items-center justify-center text-red-500 hover:bg-red-50 rounded-xl transition-colors shrink-0"
-                    title="Hapus"
-                  >
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
+            cart.map((item) => (
+              <div key={item.productId} className="ss-pos-cart-item">
+                {/* Thumbnail */}
+                <div className="ss-pos-cart-thumb">
+                  <span className="material-symbols-outlined">inventory_2</span>
                 </div>
-              ))}
-            </div>
+
+                {/* Info */}
+                <div className="ss-pos-cart-info">
+                  <p className="ss-pos-cart-name">{item.name}</p>
+                  <p className="ss-pos-cart-sku">{item.sku}</p>
+                  <p className="ss-pos-cart-price">{formatCurrency(item.price)}</p>
+                </div>
+
+                {/* Qty */}
+                <div className="ss-pos-qty">
+                  <button
+                    className="ss-pos-qty-btn"
+                    onClick={() => updateQty(item.productId, -1)}
+                    disabled={item.quantity <= 1}
+                    aria-label={`Kurangi ${item.name}`}
+                    type="button"
+                  >−</button>
+                  <span className="ss-pos-qty-value">{item.quantity}</span>
+                  <button
+                    className="ss-pos-qty-btn"
+                    onClick={() => updateQty(item.productId, 1)}
+                    disabled={item.quantity >= item.stockAvailable}
+                    aria-label={`Tambah ${item.name}`}
+                    type="button"
+                  >+</button>
+                </div>
+
+                {/* Subtotal */}
+                <div className="ss-pos-item-total">
+                  <span className="ss-pos-item-total-value">
+                    {formatCurrency(item.price * item.quantity)}
+                  </span>
+                </div>
+
+                {/* Remove */}
+                <button
+                  className="ss-pos-remove-btn"
+                  onClick={() => removeItem(item.productId)}
+                  aria-label={`Hapus ${item.name}`}
+                  type="button"
+                >
+                  <span className="material-symbols-outlined">delete</span>
+                </button>
+              </div>
+            ))
           )}
         </div>
       </div>
 
-      {/* Right Panel: Summary */}
-      <div className="w-96 flex flex-col bg-white">
-        <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-          <h3 className="font-bold text-slate-800 text-lg">Ringkasan</h3>
-          <span className="text-xs font-semibold bg-primary-50 text-primary-700 px-2.5 py-1 rounded-full border border-primary-100">
-            {locations.find(l => l.id === locationId)?.name}
+      {/* ── RIGHT: Summary Panel ── */}
+      <div className="ss-pos-right">
+        {/* Header */}
+        <div className="ss-pos-summary-header">
+          <h3 className="ss-pos-summary-title">Ringkasan</h3>
+          <span className="ss-pos-location-badge">
+            <span className="material-symbols-outlined" style={{ fontSize: '14px', fontVariationSettings: "'FILL' 1" }}>location_on</span>
+            {locationName}
           </span>
         </div>
 
-        <div className="flex-1 p-6 flex flex-col gap-4">
-          <div className="flex justify-between text-sm text-slate-600">
+        {/* Body */}
+        <div className="ss-pos-summary-body">
+          <div className="ss-pos-summary-row">
             <span>Total Item</span>
-            <span className="font-bold text-slate-800">{totalItems} {totalItems > 1 ? 'items' : 'item'}</span>
+            <span className="ss-pos-summary-row-value">{totalItems} item</span>
           </div>
-          <div className="flex justify-between text-sm text-slate-600">
+          <div className="ss-pos-summary-row">
             <span>Subtotal</span>
-            <span className="font-semibold">Rp {totalAmount.toLocaleString('id-ID')}</span>
+            <span className="ss-pos-summary-row-value">{formatCurrency(totalAmount)}</span>
           </div>
-          <div className="flex justify-between text-sm text-slate-600 pb-4 border-b border-slate-100">
+          <div className="ss-pos-summary-row">
             <span>Pajak (0%)</span>
-            <span className="font-semibold">Rp 0</span>
+            <span className="ss-pos-summary-row-value">Rp 0</span>
           </div>
-          
-          <div className="flex justify-between items-end mt-2">
-            <span className="text-slate-500 font-medium">Total Bayar</span>
-            <span className="text-3xl font-bold text-primary-600 tracking-tight">
-              Rp {totalAmount.toLocaleString('id-ID')}
-            </span>
+          <hr className="ss-pos-summary-divider" />
+          <div className="ss-pos-total-row">
+            <span className="ss-pos-total-label">Total Bayar</span>
+            <span className="ss-pos-total-value">{formatCurrency(totalAmount)}</span>
           </div>
         </div>
 
-        <div className="p-6 pt-0 mt-auto">
+        {/* CTA */}
+        <div className="ss-pos-footer">
           <button
+            id="btn-bayar-sekarang"
             onClick={handleCheckout}
             disabled={cart.length === 0 || isCheckout}
-            className="w-full py-4 bg-primary-600 hover:bg-primary-500 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-bold rounded-2xl shadow-lg shadow-primary-500/30 transition-all active:scale-[0.98] flex justify-center items-center gap-2 text-lg"
+            className="ss-pos-checkout-btn"
+            type="button"
           >
             {isCheckout ? (
               <>
-                <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                <div className="ss-pos-checkout-spinner" />
                 Memproses...
               </>
             ) : (
-              <>Bayar Sekarang</>
+              <>
+                <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>
+                  payments
+                </span>
+                Bayar Sekarang
+              </>
             )}
           </button>
         </div>
       </div>
 
+      {/* Receipt Modal */}
       {receiptData && (
         <ReceiptModal
           data={receiptData}

@@ -1,7 +1,14 @@
+/**
+ * page.tsx — Kasir / POS
+ *
+ * Server Component: auth check + fetch locations → render POSInterface
+ * Redesign: ISSUE-029-D6
+ */
+
 import { Metadata } from 'next';
-import { auth } from '@/auth';
+import { auth }     from '@/auth';
 import { redirect } from 'next/navigation';
-import { db } from '@/lib/db';
+import { db }       from '@/lib/db';
 import POSInterface from './POSInterface';
 
 export const metadata: Metadata = {
@@ -14,37 +21,77 @@ export default async function KasirPage() {
   if (!session?.user) redirect('/login');
 
   const locations = await db.location.findMany({
-    where: { isActive: true },
+    where:   { isActive: true },
     orderBy: [{ type: 'asc' }, { name: 'asc' }],
-    select: { id: true, name: true, type: true },
+    select:  { id: true, name: true, type: true },
   });
 
   return (
-    <main className="min-h-screen bg-slate-50 flex flex-col h-screen">
-      {/* Header Kasir */}
-      <header className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between shrink-0">
+    <div className="ss-pos-root" style={{ height: '100%' }}>
+      {/* ── Header Kasir ── */}
+      <header
+        style={{
+          display:        'flex',
+          alignItems:     'center',
+          justifyContent: 'space-between',
+          padding:        'var(--space-4) var(--space-6)',
+          background:     'var(--color-card)',
+          borderBottom:   '1px solid var(--color-border)',
+          flexShrink:     0,
+        }}
+      >
         <div>
-          <h1 className="text-xl font-bold text-slate-800 tracking-tight flex items-center gap-2">
-            <span className="text-primary-600">
-              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
-              </svg>
+          <h1
+            style={{
+              fontFamily:    'var(--font-display)',
+              fontSize:      'var(--text-xl)',
+              fontWeight:    700,
+              color:         'var(--color-brand)',
+              display:       'flex',
+              alignItems:    'center',
+              gap:           'var(--space-2)',
+              letterSpacing: '-0.01em',
+            }}
+          >
+            <span
+              className="material-symbols-outlined"
+              style={{ fontSize: '24px', color: 'var(--color-accent)', fontVariationSettings: "'FILL' 1" }}
+            >
+              point_of_sale
             </span>
             SmartStock POS
           </h1>
-          <p className="text-xs text-slate-500 mt-0.5">Sistem Point of Sale & Kasir</p>
+          <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
+            Sistem Point of Sale &amp; Kasir
+          </p>
         </div>
-        <div className="flex items-center gap-4 text-sm font-medium text-slate-600">
-          <a href="/" className="hover:text-primary-600 transition-colors bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
-            Kembali ke Dashboard
-          </a>
-        </div>
+
+        <a
+          href="/"
+          style={{
+            display:      'flex',
+            alignItems:   'center',
+            gap:          'var(--space-2)',
+            fontSize:     'var(--text-sm)',
+            fontWeight:   500,
+            color:        'var(--color-text-secondary)',
+            padding:      'var(--space-2) var(--space-4)',
+            background:   'var(--color-surface-low)',
+            border:       '1px solid var(--color-border)',
+            borderRadius: 'var(--radius-md)',
+            textDecoration: 'none',
+            transition:   'background-color var(--duration-fast)',
+          }}
+        >
+          <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>arrow_back</span>
+          Kembali ke Dashboard
+        </a>
       </header>
 
-      {/* Main POS Interface (Client) */}
-      <div className="flex-1 overflow-hidden">
+      {/* ── Main POS Interface ── */}
+      <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
         <POSInterface locations={locations} />
       </div>
-    </main>
+    </div>
   );
 }
