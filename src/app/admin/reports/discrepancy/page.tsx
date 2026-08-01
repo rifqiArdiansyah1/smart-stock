@@ -23,15 +23,13 @@ export default async function DiscrepancyReportPage() {
   if (role !== 'OWNER' && role !== 'ADMIN') redirect('/');
 
   return (
-    <div className="ss-page-audit">
+    <div className="flex flex-col gap-6 w-full animate-fade-in">
       {/* ── Page Header ── */}
-      <div className="ss-audit-header">
-        <div>
-          <h2 className="ss-audit-title">Laporan Selisih Stok</h2>
-          <p className="ss-audit-subtitle">
-            Analisis produk yang paling sering mengalami selisih dan estimasi nilai kerugiannya.
-          </p>
-        </div>
+      <div className="flex flex-col gap-1">
+        <h2 className="font-display text-2xl font-bold text-slate-800 dark:text-slate-100">Laporan Selisih Stok</h2>
+        <p className="font-sans text-slate-500 dark:text-slate-400 text-sm">
+          Analisis produk yang paling sering mengalami selisih dan estimasi nilai kerugiannya.
+        </p>
       </div>
 
       {/* ── Report Client Component ── */}

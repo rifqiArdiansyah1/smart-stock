@@ -69,49 +69,66 @@ export default async function ProductsPage() {
   const categoryCount = categories.length;
 
   return (
-    <div className="ss-page-products">
+    <div className="flex flex-col gap-6 w-full animate-fade-in">
 
       {/* ── Page Header ── */}
-      <div className="ss-page-header">
-        <h2 className="ss-page-title">Manajemen Produk</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="font-display text-2xl font-bold text-slate-800 dark:text-slate-100">
+          Manajemen Produk
+        </h2>
       </div>
 
       {/* ── Stat Cards ── */}
-      <div className="ss-stat-grid">
-        <div className="ss-stat-card">
-          <span className="material-symbols-outlined ss-stat-icon" style={{ color: 'var(--ss-primary)' }}>
-            inventory_2
-          </span>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Card 1 */}
+        <div className="flex items-center gap-4 p-5 bg-white dark:bg-slate-800/80 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700/50 hover:shadow-md transition-shadow">
+          <div className="w-12 h-12 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center shrink-0">
+            <svg className="w-6 h-6 text-indigo-600 dark:text-indigo-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+            </svg>
+          </div>
           <div>
-            <p className="ss-stat-value">{totalProducts}</p>
-            <p className="ss-stat-label">Total Produk</p>
+            <p className="font-mono text-2xl font-bold text-slate-800 dark:text-slate-100 leading-none">{totalProducts}</p>
+            <p className="font-sans text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">Total Produk</p>
           </div>
         </div>
-        <div className="ss-stat-card">
-          <span className="material-symbols-outlined ss-stat-icon" style={{ color: 'var(--ss-success)' }}>
-            check_circle
-          </span>
+
+        {/* Card 2 */}
+        <div className="flex items-center gap-4 p-5 bg-white dark:bg-slate-800/80 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700/50 hover:shadow-md transition-shadow">
+          <div className="w-12 h-12 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center shrink-0">
+            <svg className="w-6 h-6 text-emerald-600 dark:text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
+            </svg>
+          </div>
           <div>
-            <p className="ss-stat-value">{activeCount}</p>
-            <p className="ss-stat-label">Aktif</p>
+            <p className="font-mono text-2xl font-bold text-slate-800 dark:text-slate-100 leading-none">{activeCount}</p>
+            <p className="font-sans text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">Aktif</p>
           </div>
         </div>
-        <div className="ss-stat-card">
-          <span className="material-symbols-outlined ss-stat-icon" style={{ color: 'var(--ss-warning)' }}>
-            warning
-          </span>
+
+        {/* Card 3 */}
+        <div className="flex items-center gap-4 p-5 bg-white dark:bg-slate-800/80 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700/50 hover:shadow-md transition-shadow">
+          <div className="w-12 h-12 rounded-xl bg-amber-50 dark:bg-amber-500/10 flex items-center justify-center shrink-0">
+            <svg className="w-6 h-6 text-amber-600 dark:text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+          </div>
           <div>
-            <p className="ss-stat-value">{lowStockCount}</p>
-            <p className="ss-stat-label">Stok Rendah</p>
+            <p className="font-mono text-2xl font-bold text-slate-800 dark:text-slate-100 leading-none">{lowStockCount}</p>
+            <p className="font-sans text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">Stok Rendah</p>
           </div>
         </div>
-        <div className="ss-stat-card">
-          <span className="material-symbols-outlined ss-stat-icon" style={{ color: 'var(--ss-secondary)' }}>
-            category
-          </span>
+
+        {/* Card 4 */}
+        <div className="flex items-center gap-4 p-5 bg-white dark:bg-slate-800/80 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700/50 hover:shadow-md transition-shadow">
+          <div className="w-12 h-12 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center shrink-0">
+            <svg className="w-6 h-6 text-indigo-600 dark:text-indigo-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+            </svg>
+          </div>
           <div>
-            <p className="ss-stat-value">{categoryCount}</p>
-            <p className="ss-stat-label">Kategori</p>
+            <p className="font-mono text-2xl font-bold text-slate-800 dark:text-slate-100 leading-none">{categoryCount}</p>
+            <p className="font-sans text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">Kategori</p>
           </div>
         </div>
       </div>

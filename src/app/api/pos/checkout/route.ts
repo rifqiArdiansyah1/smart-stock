@@ -10,7 +10,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const userId = (session.user as any).id;
+  let userId = (session.user as any).id;
+  if (!userId && session.user.email) {
+    const dbUser = await db.user.findUnique({ where: { email: session.user.email } });
+    if (dbUser) {
+      userId = dbUser.id;
+    }
+  }
+
+  if (!userId) {
+    return NextResponse.json({ error: 'User ID is missing from session' }, { status: 401 });
+  }
 
   try {
     const body = await req.json();

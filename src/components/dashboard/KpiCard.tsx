@@ -1,6 +1,6 @@
 /**
  * KpiCard — Warehouse Signal
- * Card metrik KPI besar dengan font JetBrains Mono, trend indicator, dan aksen warna border
+ * Card metrik KPI besar dengan font tipografi yang jelas, trend indicator, dan aksen warna
  */
 
 import React from 'react';
@@ -27,70 +27,42 @@ export function KpiCard({
   icon,
   accentColor = 'brand',
 }: KpiCardProps) {
-  const getBorderTopColor = () => {
-    switch (accentColor) {
-      case 'accent': return 'var(--color-accent)';
-      case 'critical': return 'var(--color-critical)';
-      case 'ok': return 'var(--color-ok)';
-      case 'brand':
-      default: return 'var(--color-brand)';
-    }
+  // Mapping accent colors to Tailwind border and text classes
+  const colorMap = {
+    brand: { border: 'border-t-indigo-500', text: 'text-indigo-600 dark:text-indigo-400' },
+    accent: { border: 'border-t-amber-500', text: 'text-amber-600 dark:text-amber-400' },
+    critical: { border: 'border-t-red-500', text: 'text-red-600 dark:text-red-400' },
+    ok: { border: 'border-t-emerald-500', text: 'text-emerald-600 dark:text-emerald-400' },
   };
 
+  const selectedColor = colorMap[accentColor];
+
   return (
-    <Card
-      padding="var(--space-5)"
-      style={{
-        borderTop: `4px solid ${getBorderTopColor()}`,
-        position: 'relative',
-        overflow: 'hidden',
-      }}
+    <div
+      className={`relative overflow-hidden bg-white dark:bg-slate-800/80 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700/50 border-t-4 ${selectedColor.border} p-6 transition-all duration-300 hover:shadow-xl hover:-translate-y-1 hover:bg-slate-50 dark:hover:bg-slate-800`}
     >
       {/* Background Icon Watermark */}
       {icon && (
         <div
           aria-hidden="true"
-          style={{
-            position: 'absolute',
-            top: 'var(--space-3)',
-            right: 'var(--space-3)',
-            color: 'var(--color-border)',
-            opacity: 0.5,
-            pointerEvents: 'none',
-          }}
+          className="absolute top-4 right-4 text-slate-300 dark:text-slate-700 opacity-50 pointer-events-none transition-transform duration-500 group-hover:scale-110"
         >
           {icon}
         </div>
       )}
 
       {/* Label */}
-      <p
-        style={{
-          fontFamily: 'var(--font-body)',
-          fontSize: 'var(--text-sm)',
-          fontWeight: 500,
-          color: 'var(--color-text-secondary)',
-          margin: '0 0 var(--space-2)',
-        }}
-      >
+      <p className="font-sans text-sm font-medium text-slate-500 dark:text-slate-400 mb-2">
         {title}
       </p>
 
       {/* Value */}
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--space-2)', marginBottom: 'var(--space-2)' }}>
-        <span
-          style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: 'var(--text-3xl)',
-            fontWeight: 700,
-            color: accentColor === 'critical' ? 'var(--color-critical)' : 'var(--color-brand)',
-            letterSpacing: '-0.02em',
-          }}
-        >
+      <div className="flex items-baseline gap-2 mb-3">
+        <span className={`font-mono text-3xl font-bold tracking-tight ${selectedColor.text}`}>
           {value}
         </span>
         {unit && (
-          <span style={{ fontFamily: 'var(--font-body)', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
+          <span className="font-sans text-xs text-slate-500 dark:text-slate-400">
             {unit}
           </span>
         )}
@@ -98,24 +70,21 @@ export function KpiCard({
 
       {/* Trend Indicator */}
       {trend && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)', fontSize: 'var(--text-xs)' }}>
+        <div className="flex items-center gap-1 text-xs">
           <span
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              fontWeight: 500,
-              color: trend.isWarning
-                ? 'var(--color-warn-text)'
+            className={`flex items-center font-medium px-2 py-0.5 rounded-full ${
+              trend.isWarning
+                ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400'
                 : trend.isPositive === false
-                ? 'var(--color-critical-text)'
-                : 'var(--color-ok-text)',
-            }}
+                ? 'bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-400'
+                : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400'
+            }`}
           >
             {trend.isPositive ? '↑' : trend.isPositive === false ? '↓' : '•'} {trend.value}
           </span>
         </div>
       )}
-    </Card>
+    </div>
   );
 }
 

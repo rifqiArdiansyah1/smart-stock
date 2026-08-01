@@ -299,7 +299,7 @@ export default function POSInterface({ locations }: POSInterfaceProps) {
         {/* Search Bar */}
         <div className="ss-pos-search-wrap" style={{ position: 'relative' }}>
           <form onSubmit={handleLookup} className="ss-pos-search-form">
-            <span className="material-symbols-outlined ss-pos-search-icon">search</span>
+            {/* <span className="material-symbols-outlined ss-pos-search-icon">search</span> */}
             <input
               id="pos-barcode-input"
               ref={inputRef}

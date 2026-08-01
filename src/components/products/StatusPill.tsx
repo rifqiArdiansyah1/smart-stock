@@ -1,7 +1,7 @@
 /**
  * StatusPill — Komponen badge status stok produk
  *
- * Menggunakan CSS vars dari Design System (issue #30).
+ * Menggunakan kelas Tailwind CSS modern.
  * Varian: success | warning | critical | inactive
  */
 
@@ -15,16 +15,23 @@ interface StatusPillProps {
 }
 
 const variantStyles: Record<StockStatus, string> = {
-  success:  'ss-pill-success',
-  warning:  'ss-pill-warning',
-  critical: 'ss-pill-critical',
-  inactive: 'ss-pill-inactive',
+  success:  'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400',
+  warning:  'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400',
+  critical: 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400',
+  inactive: 'bg-slate-100 text-slate-600 dark:bg-slate-700/50 dark:text-slate-400',
+};
+
+const dotStyles: Record<StockStatus, string> = {
+  success:  'bg-emerald-500 dark:bg-emerald-400',
+  warning:  'bg-amber-500 dark:bg-amber-400',
+  critical: 'bg-red-500 dark:bg-red-400',
+  inactive: 'bg-slate-400 dark:bg-slate-500',
 };
 
 export function StatusPill({ status, label }: StatusPillProps) {
   return (
-    <span className={`ss-pill ${variantStyles[status]}`}>
-      <span className="ss-pill-dot" />
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full font-medium text-xs whitespace-nowrap transition-colors ${variantStyles[status]}`}>
+      <span className={`w-1.5 h-1.5 rounded-full ${dotStyles[status]}`} />
       {label}
     </span>
   );

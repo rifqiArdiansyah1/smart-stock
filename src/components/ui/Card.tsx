@@ -3,6 +3,8 @@
  * Container dengan 1px border, 12px radius, dan optional hover state
  */
 
+"use client";
+
 import React from 'react';
 
 interface CardProps {

@@ -105,9 +105,9 @@ export default function DashboardClient() {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
+    <div className="flex flex-col gap-6 animate-fade-in">
       {/* ── 3 KPI Cards ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 'var(--space-4)' }}>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <KpiCard
           title="Total SKU Aktif"
           value={kpi ? kpi.totalProducts.toLocaleString('id-ID') : '...'}
@@ -148,43 +148,39 @@ export default function DashboardClient() {
       </div>
 
       {/* ── Main Data Section (2 Columns: Fast Moving Chart + Critical Alerts) ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 'var(--space-6)' }}>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Fast Moving Chart Panel */}
-        <Card padding="var(--space-5)" style={{ display: 'flex', flexDirection: 'column' }}>
+        <div className="flex flex-col bg-white dark:bg-slate-800/80 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700/50 p-6 overflow-hidden">
           <CardHeader title="Barang Terlaris (Fast Moving)" subtitle="7 hari terakhir berdasarkan transaksi POS" />
 
           {isLoadingCharts ? (
-            <div style={{ padding: 'var(--space-6)', textAlign: 'center', color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)' }}>
+            <div className="p-8 text-center text-slate-500 dark:text-slate-400 text-sm animate-pulse">
               Memuat grafik...
             </div>
           ) : fastMoving.length === 0 ? (
-            <div style={{ padding: 'var(--space-6)', textAlign: 'center', color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)' }}>
+            <div className="p-8 text-center text-slate-500 dark:text-slate-400 text-sm">
               Belum ada data transaksi fast moving.
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', marginTop: 'var(--space-2)' }}>
+            <div className="flex flex-col gap-4 mt-4">
               {fastMoving.slice(0, 6).map((item) => {
                 const maxVal = Math.max(...fastMoving.map((f) => f.totalSold || 1), 1);
                 const pct = Math.max(8, Math.round(((item.totalSold || 0) / maxVal) * 100));
 
                 return (
-                  <div key={item.productId} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-xs)' }}>
-                      <span style={{ fontFamily: 'var(--font-body)', fontWeight: 500, color: 'var(--color-text-primary)' }}>
+                  <div key={item.productId} className="flex flex-col gap-1.5 group">
+                    <div className="flex justify-between text-xs">
+                      <span className="font-sans font-medium text-slate-700 dark:text-slate-300">
                         {item.productName}
                       </span>
-                      <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-brand)', fontWeight: 700 }}>
+                      <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400">
                         {item.totalSold || 0} pcs
                       </span>
                     </div>
-                    <div style={{ width: '100%', backgroundColor: 'var(--color-surface-low)', height: '8px', borderRadius: 'var(--radius-full)', overflow: 'hidden' }}>
+                    <div className="w-full bg-slate-100 dark:bg-slate-700/50 h-2.5 rounded-full overflow-hidden">
                       <div
-                        style={{
-                          height: '100%',
-                          width: `${pct}%`,
-                          backgroundColor: 'var(--color-brand)',
-                          borderRadius: 'var(--radius-full)',
-                        }}
+                        className="h-full bg-gradient-to-r from-indigo-500 to-indigo-400 rounded-full transition-all duration-1000 ease-out group-hover:brightness-110"
+                        style={{ width: `${pct}%` }}
                       />
                     </div>
                   </div>
@@ -192,62 +188,56 @@ export default function DashboardClient() {
               })}
             </div>
           )}
-        </Card>
+        </div>
 
         {/* Critical Alerts Component */}
-        <AlertList items={criticalItems} />
+        <div className="h-[400px] lg:h-auto">
+          <AlertList items={criticalItems} />
+        </div>
       </div>
 
       {/* ── Recent Opname Sessions Table ── */}
-      <Card padding="var(--space-5)">
+      <div className="bg-white dark:bg-slate-800/80 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700/50 p-6 overflow-hidden">
         <CardHeader
           title="Sesi Stock Opname Terbaru"
           subtitle="5 sesi perhitungan fisik terakhir"
           action={
-            <Link href="/admin/approval" style={{ fontFamily: 'var(--font-body)', fontSize: 'var(--text-xs)', color: 'var(--color-brand)', textDecoration: 'underline' }}>
-              Approval Inbox →
+            <Link href="/admin/approval" className="font-sans text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors">
+              Approval Inbox &rarr;
             </Link>
           }
         />
 
         {recentOpname.length === 0 ? (
-          <p style={{ fontFamily: 'var(--font-body)', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', margin: 0 }}>
+          <p className="text-slate-500 dark:text-slate-400 text-sm m-0">
             Belum ada sesi opname terbaru.
           </p>
         ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' }}>
-              <thead style={{ borderBottom: '1px solid var(--color-border)', backgroundColor: 'var(--color-surface-low)' }}>
+          <div className="overflow-x-auto mt-2">
+            <table className="w-full text-left text-sm whitespace-nowrap">
+              <thead className="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-700">
                 <tr>
-                  <th style={{ padding: 'var(--space-3)', fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
-                    Lokasi
-                  </th>
-                  <th style={{ padding: 'var(--space-3)', fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
-                    Petugas
-                  </th>
-                  <th style={{ padding: 'var(--space-3)', fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
-                    Tanggal
-                  </th>
-                  <th style={{ padding: 'var(--space-3)', fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', textAlign: 'right' }}>
-                    Status
-                  </th>
+                  <th className="p-4 font-sans font-semibold text-slate-600 dark:text-slate-300">Lokasi</th>
+                  <th className="p-4 font-sans font-semibold text-slate-600 dark:text-slate-300">Petugas</th>
+                  <th className="p-4 font-sans font-semibold text-slate-600 dark:text-slate-300">Tanggal</th>
+                  <th className="p-4 font-sans font-semibold text-slate-600 dark:text-slate-300 text-right">Status</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
                 {recentOpname.map((op) => (
-                  <tr key={op.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
-                    <td style={{ padding: 'var(--space-3)', fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--color-brand)' }}>
-                      <Link href={`/admin/approval/${op.id}`} style={{ color: 'inherit', textDecoration: 'none' }}>
+                  <tr key={op.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                    <td className="p-4 font-mono font-bold text-indigo-600 dark:text-indigo-400">
+                      <Link href={`/admin/approval/${op.id}`} className="hover:underline">
                         {op.locationName}
                       </Link>
                     </td>
-                    <td style={{ padding: 'var(--space-3)', fontFamily: 'var(--font-body)' }}>
+                    <td className="p-4 font-sans text-slate-700 dark:text-slate-300">
                       {op.startedBy}
                     </td>
-                    <td style={{ padding: 'var(--space-3)', fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
+                    <td className="p-4 font-mono text-xs text-slate-500 dark:text-slate-400">
                       {new Date(op.createdAt).toLocaleDateString('id-ID')}
                     </td>
-                    <td style={{ padding: 'var(--space-3)', textAlign: 'right' }}>
+                    <td className="p-4 text-right">
                       <StatusPill
                         value={op.status === 'IN_PROGRESS' ? 'Berjalan' : op.status === 'PENDING_APPROVAL' ? 'Review' : 'Approved'}
                         unit=""
@@ -261,7 +251,7 @@ export default function DashboardClient() {
             </table>
           </div>
         )}
-      </Card>
+      </div>
     </div>
   );
 }

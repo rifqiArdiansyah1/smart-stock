@@ -20,7 +20,26 @@ export const authConfig = {
       }
 
       // Require authentication for all other routes
-      return isLoggedIn;
+      if (!isLoggedIn) return false;
+
+      // Role-based access control (RBAC) via middleware
+      const role = (auth.user as any).role as string;
+      const path = nextUrl.pathname;
+
+      if (path.startsWith('/admin') && role !== 'OWNER' && role !== 'ADMIN') {
+        return Response.redirect(new URL('/', nextUrl));
+      }
+      if (path.startsWith('/kasir') && role !== 'OWNER' && role !== 'ADMIN' && role !== 'KASIR') {
+        return Response.redirect(new URL('/', nextUrl));
+      }
+      if (path.startsWith('/staff') && role !== 'OWNER' && role !== 'ADMIN' && role !== 'STAFF_GUDANG') {
+        return Response.redirect(new URL('/', nextUrl));
+      }
+      if (path.startsWith('/opname') && role !== 'OWNER' && role !== 'ADMIN' && role !== 'STAFF_GUDANG') {
+        return Response.redirect(new URL('/', nextUrl));
+      }
+
+      return true;
     },
     jwt({ token, user }) {
       // Pada saat pertama kali sign in, data 'user' akan tersedia

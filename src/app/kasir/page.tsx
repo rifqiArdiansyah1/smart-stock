@@ -83,7 +83,7 @@ export default async function KasirPage() {
             transition:   'background-color var(--duration-fast)',
           }}
         >
-          <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>arrow_back</span>
+          {/* <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>arrow_back</span> */}
           Kembali ke Dashboard
         </a>
       </header>

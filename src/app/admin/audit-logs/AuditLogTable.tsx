@@ -190,7 +190,7 @@ export default function AuditLogTable({ actors }: AuditLogTableProps) {
         <div className="ss-audit-filter-field">
           <label className="ss-audit-filter-label" htmlFor="al-actor">Pengguna</label>
           <div className="ss-audit-filter-select-wrap">
-            <span className="material-symbols-outlined ss-audit-filter-icon">person</span>
+            {/* <span className="material-symbols-outlined ss-audit-filter-icon">person</span> */}
             <select
               id="al-actor"
               value={actorId}
@@ -210,7 +210,7 @@ export default function AuditLogTable({ actors }: AuditLogTableProps) {
         <div className="ss-audit-filter-field">
           <label className="ss-audit-filter-label" htmlFor="al-action">Jenis Tindakan</label>
           <div className="ss-audit-filter-select-wrap">
-            <span className="material-symbols-outlined ss-audit-filter-icon">category</span>
+            {/* <span className="material-symbols-outlined ss-audit-filter-icon">category</span> */}
             <select
               id="al-action"
               value={action}
@@ -229,7 +229,7 @@ export default function AuditLogTable({ actors }: AuditLogTableProps) {
         <div className="ss-audit-filter-field">
           <label className="ss-audit-filter-label" htmlFor="al-entity">Entitas</label>
           <div className="ss-audit-filter-select-wrap">
-            <span className="material-symbols-outlined ss-audit-filter-icon">database</span>
+            {/* <span className="material-symbols-outlined ss-audit-filter-icon">database</span> */}
             <select
               id="al-entity"
               value={entityType}
@@ -248,7 +248,7 @@ export default function AuditLogTable({ actors }: AuditLogTableProps) {
         <div className="ss-audit-filter-field">
           <label className="ss-audit-filter-label" htmlFor="al-date">Rentang Tanggal</label>
           <div className="ss-audit-filter-select-wrap">
-            <span className="material-symbols-outlined ss-audit-filter-icon">calendar_today</span>
+            {/* <span className="material-symbols-outlined ss-audit-filter-icon">calendar_today</span> */}
             <select
               id="al-date"
               value={dateRange}

@@ -16,7 +16,8 @@ export default async function OpnameLayout({ children }: { children: React.React
   const role     = (session.user as any).role as string;
   const userName = session.user.name ?? session.user.email ?? 'Staf';
 
-  if (role !== 'STAFF_GUDANG') redirect('/');
+  const allowedRoles = ['OWNER', 'ADMIN', 'STAFF_GUDANG'];
+  if (!allowedRoles.includes(role)) redirect('/');
 
   return (
     <AppShell role="STAFF_GUDANG" userName={userName} pageTitle="Stock Opname">
