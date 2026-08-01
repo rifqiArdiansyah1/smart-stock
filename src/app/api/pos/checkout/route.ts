@@ -14,16 +14,31 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { locationId, items } = body as {
+    const { locationId, items, cashGiven, changeGiven } = body as {
       locationId: string;
       items: { productId: string; quantity: number; price: number; name: string }[];
+      cashGiven?: number;
+      changeGiven?: number;
     };
 
-    if (!locationId || !items || items.length === 0) {
-      return NextResponse.json({ error: 'Data tidak valid' }, { status: 400 });
+    if (!locationId || !Array.isArray(items) || items.length === 0) {
+      return NextResponse.json({ error: 'Data transaksi tidak lengkap' }, { status: 400 });
+    }
+
+    // Validate quantity for each item
+    for (const item of items) {
+      if (!item.productId || typeof item.quantity !== 'number' || item.quantity <= 0 || !Number.isInteger(item.quantity)) {
+        return NextResponse.json(
+          { error: `Jumlah produk (${item.name || 'item'}) tidak valid` },
+          { status: 400 }
+        );
+      }
     }
 
     const referenceId = randomUUID();
+    const notesDetail = cashGiven != null
+      ? `Penjualan kasir (Tunai: Rp ${cashGiven.toLocaleString('id-ID')}, Kembalian: Rp ${(changeGiven || 0).toLocaleString('id-ID')})`
+      : `Penjualan kasir`;
 
     // Jalankan transaksi database
     await db.$transaction(async (tx) => {
@@ -57,7 +72,7 @@ export async function POST(req: NextRequest) {
             quantityBefore: currentQty,
             quantityAfter: newQty,
             referenceId: referenceId,
-            notes: `Penjualan kasir`,
+            notes: notesDetail,
           },
         });
 
@@ -80,8 +95,8 @@ export async function POST(req: NextRequest) {
           'CHECKOUT',
           'StockMovement',
           referenceId,
-          { quantity: currentQty },
-          { quantity: newQty },
+          { quantity: currentQty, productId: item.productId },
+          { quantity: newQty, productId: item.productId, cashGiven, changeGiven },
           tx
         );
       }

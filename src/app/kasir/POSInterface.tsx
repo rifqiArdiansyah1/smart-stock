@@ -1,13 +1,13 @@
 /**
  * POSInterface.tsx — POS Kasir Client Component
  *
- * Redesign per ISSUE-029-D6:
- * - Split layout: produk kiri (scan + cart) | ringkasan kanan
- * - CTA amber besar "Bayar Sekarang"
- * - Mobile: stacked (produk atas, summary bawah)
- * - Location selector screen sebelum masuk POS
+ * Enhanced per issue.md:
+ * - Search suggestions dropdown for partial product name / SKU / Barcode lookup
+ * - Cash Payment & Change calculator with nominal shortcut buttons (Pas, 20k, 50k, 100k, 200k)
+ * - Real-time change calculation & validation (disables checkout if cash is insufficient)
+ * - Integrated receipt data with cashGiven & changeGiven
  *
- * Design ref: stitch — Warehouse Signal Design System
+ * Design: Warehouse Signal System
  */
 
 'use client';
@@ -28,6 +28,20 @@ type CartItem = {
   stockAvailable: number;
 };
 
+type LookupProduct = {
+  id: string;
+  name: string;
+  sku: string;
+  barcode: string;
+  price: number;
+  unit: string;
+};
+
+type SuggestionItem = {
+  product: LookupProduct;
+  stockAvailable: number;
+};
+
 interface POSInterfaceProps {
   locations: Location[];
 }
@@ -37,27 +51,101 @@ function formatCurrency(v: number): string {
 }
 
 export default function POSInterface({ locations }: POSInterfaceProps) {
-  const [locationId, setLocationId] = useState<string>('');
-  const [cart, setCart]             = useState<CartItem[]>([]);
+  const [locationId, setLocationId]     = useState<string>('');
+  const [cart, setCart]                 = useState<CartItem[]>([]);
   const [barcodeInput, setBarcodeInput] = useState('');
-  const [isLoading, setIsLoading]   = useState(false);
-  const [isCheckout, setIsCheckout] = useState(false);
-  const [receiptData, setReceiptData] = useState<any>(null);
-  const [errorMsg, setErrorMsg]     = useState('');
+  const [suggestions, setSuggestions]   = useState<SuggestionItem[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  
+  // Cash Payment Calculator State
+  const [cashInput, setCashInput]       = useState<string>('');
+  
+  const [isLoading, setIsLoading]       = useState(false);
+  const [isCheckout, setIsCheckout]     = useState(false);
+  const [receiptData, setReceiptData]   = useState<any>(null);
+  const [errorMsg, setErrorMsg]         = useState('');
 
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef    = useRef<HTMLInputElement>(null);
+  const searchTimer = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (locationId && inputRef.current) inputRef.current.focus();
   }, [locationId]);
 
-  /* ── Product lookup ── */
+  /* ── Add product to cart helper ── */
+  const addProductToCart = (prod: LookupProduct, stockAvailable: number) => {
+    if (stockAvailable <= 0) {
+      setErrorMsg(`Stok ${prod.name} kosong di lokasi ini.`);
+      return;
+    }
+
+    setErrorMsg('');
+    setCart((prev) => {
+      const existing = prev.find((i) => i.productId === prod.id);
+      if (existing) {
+        if (existing.quantity >= stockAvailable) {
+          setErrorMsg(`Maksimal stok ${prod.name}: ${stockAvailable}.`);
+          return prev;
+        }
+        return prev.map((i) =>
+          i.productId === prod.id ? { ...i, quantity: i.quantity + 1 } : i
+        );
+      }
+      return [
+        ...prev,
+        {
+          productId:      prod.id,
+          sku:            prod.sku,
+          barcode:        prod.barcode,
+          name:           prod.name,
+          price:          prod.price,
+          unit:           prod.unit,
+          quantity:       1,
+          stockAvailable: stockAvailable,
+        },
+      ];
+    });
+  };
+
+  /* ── Search Input Change (Debounced lookup for suggestions) ── */
+  const handleInputChange = (val: string) => {
+    setBarcodeInput(val);
+    setErrorMsg('');
+
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+
+    if (!val.trim()) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    searchTimer.current = setTimeout(async () => {
+      if (!locationId || !val.trim()) return;
+      try {
+        const res  = await fetch(`/api/pos/lookup?q=${encodeURIComponent(val.trim())}&locationId=${locationId}`);
+        const data = await res.json();
+        if (res.ok && data.results && data.results.length > 0) {
+          setSuggestions(data.results);
+          setShowSuggestions(true);
+        } else {
+          setSuggestions([]);
+          setShowSuggestions(false);
+        }
+      } catch {
+        setSuggestions([]);
+      }
+    }, 250);
+  };
+
+  /* ── Submit Lookup ── */
   const handleLookup = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!barcodeInput.trim() || !locationId) return;
 
     setIsLoading(true);
     setErrorMsg('');
+    setShowSuggestions(false);
     const query = barcodeInput.trim();
     setBarcodeInput('');
 
@@ -69,42 +157,29 @@ export default function POSInterface({ locations }: POSInterfaceProps) {
         setErrorMsg(data.error || 'Gagal mencari produk');
         return;
       }
-      if (data.stockAvailable <= 0) {
-        setErrorMsg(`Stok ${data.product.name} kosong di lokasi ini.`);
-        return;
-      }
 
-      setCart((prev) => {
-        const existing = prev.find((i) => i.productId === data.product.id);
-        if (existing) {
-          if (existing.quantity >= data.stockAvailable) {
-            setErrorMsg(`Maksimal stok ${data.product.name}: ${data.stockAvailable}.`);
-            return prev;
-          }
-          return prev.map((i) =>
-            i.productId === data.product.id ? { ...i, quantity: i.quantity + 1 } : i
-          );
-        }
-        return [
-          ...prev,
-          {
-            productId:      data.product.id,
-            sku:            data.product.sku,
-            barcode:        data.product.barcode,
-            name:           data.product.name,
-            price:          data.product.price,
-            unit:           data.product.unit,
-            quantity:       1,
-            stockAvailable: data.stockAvailable,
-          },
-        ];
-      });
+      if (data.product) {
+        addProductToCart(data.product, data.stockAvailable);
+      } else if (data.results && data.results.length === 1) {
+        addProductToCart(data.results[0].product, data.results[0].stockAvailable);
+      } else if (data.results && data.results.length > 1) {
+        setSuggestions(data.results);
+        setShowSuggestions(true);
+      }
     } catch {
       setErrorMsg('Terjadi kesalahan jaringan.');
     } finally {
       setIsLoading(false);
       inputRef.current?.focus();
     }
+  };
+
+  const selectSuggestion = (item: SuggestionItem) => {
+    addProductToCart(item.product, item.stockAvailable);
+    setBarcodeInput('');
+    setSuggestions([]);
+    setShowSuggestions(false);
+    inputRef.current?.focus();
   };
 
   const updateQty = (productId: string, delta: number) => {
@@ -122,9 +197,24 @@ export default function POSInterface({ locations }: POSInterfaceProps) {
     setCart((prev) => prev.filter((i) => i.productId !== productId));
   };
 
+  /* ── Computations ── */
+  const totalAmount = cart.reduce((sum, i) => sum + i.price * i.quantity, 0);
+  const totalItems  = cart.reduce((sum, i) => sum + i.quantity, 0);
+  const locationName = locations.find((l) => l.id === locationId)?.name ?? '';
+
+  const cashGiven = cashInput === '' ? 0 : Number(cashInput);
+  const changeGiven = Math.max(0, cashGiven - totalAmount);
+  const isCashInsufficient = cart.length > 0 && cashGiven < totalAmount;
+  const isPaymentValid = cart.length > 0 && cashGiven >= totalAmount;
+
+  /* ── Shortcut buttons ── */
+  const handleShortcutCash = (amt: number) => {
+    setCashInput(String(amt));
+  };
+
   /* ── Checkout ── */
   const handleCheckout = async () => {
-    if (cart.length === 0 || !locationId) return;
+    if (cart.length === 0 || !locationId || !isPaymentValid) return;
     setIsCheckout(true);
     setErrorMsg('');
 
@@ -140,6 +230,8 @@ export default function POSInterface({ locations }: POSInterfaceProps) {
             price:     i.price,
             name:      i.name,
           })),
+          cashGiven,
+          changeGiven,
         }),
       });
       const data = await res.json();
@@ -148,25 +240,23 @@ export default function POSInterface({ locations }: POSInterfaceProps) {
         return;
       }
 
-      const locationName = locations.find((l) => l.id === locationId)?.name || '';
       setReceiptData({
         referenceId: data.referenceId,
         date:        new Date(),
         locationName,
         items:       [...cart],
-        total:       cart.reduce((sum, item) => sum + item.price * item.quantity, 0),
+        total:       totalAmount,
+        cashGiven,
+        changeGiven,
       });
       setCart([]);
+      setCashInput('');
     } catch {
       setErrorMsg('Terjadi kesalahan saat memproses checkout.');
     } finally {
       setIsCheckout(false);
     }
   };
-
-  const totalAmount = cart.reduce((sum, i) => sum + i.price * i.quantity, 0);
-  const totalItems  = cart.reduce((sum, i) => sum + i.quantity, 0);
-  const locationName = locations.find((l) => l.id === locationId)?.name ?? '';
 
   /* ── Location Picker Screen ── */
   if (!locationId) {
@@ -207,24 +297,51 @@ export default function POSInterface({ locations }: POSInterfaceProps) {
       {/* ── LEFT: Scan + Cart ── */}
       <div className="ss-pos-left">
         {/* Search Bar */}
-        <div className="ss-pos-search-wrap">
+        <div className="ss-pos-search-wrap" style={{ position: 'relative' }}>
           <form onSubmit={handleLookup} className="ss-pos-search-form">
-            <span className="material-symbols-outlined ss-pos-search-icon">barcode_scanner</span>
+            <span className="material-symbols-outlined ss-pos-search-icon">search</span>
             <input
               id="pos-barcode-input"
               ref={inputRef}
               type="text"
-              placeholder="Scan barcode atau ketik SKU, lalu tekan Enter..."
+              placeholder="Scan barcode, SKU, atau ketik nama produk..."
               value={barcodeInput}
-              onChange={(e) => setBarcodeInput(e.target.value)}
+              onChange={(e) => handleInputChange(e.target.value)}
+              onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
               className="ss-pos-search-input"
               autoFocus
               autoComplete="off"
               disabled={isLoading}
-              aria-label="Scan barcode atau ketik SKU"
+              aria-label="Scan barcode atau cari nama produk"
             />
             {isLoading && <div className="ss-pos-search-spinner" />}
           </form>
+
+          {/* Search Suggestions Dropdown */}
+          {showSuggestions && suggestions.length > 0 && (
+            <div className="ss-pos-suggestions">
+              {suggestions.map((item) => (
+                <div
+                  key={item.product.id}
+                  className="ss-pos-suggestion-item"
+                  onClick={() => selectSuggestion(item)}
+                >
+                  <div className="ss-pos-suggestion-info">
+                    <span className="ss-pos-suggestion-name">{item.product.name}</span>
+                    <span className="ss-pos-suggestion-sku">
+                      {item.product.sku} {item.product.barcode ? `• ${item.product.barcode}` : ''}
+                    </span>
+                  </div>
+                  <div className="ss-pos-suggestion-right">
+                    <span className="ss-pos-suggestion-price">{formatCurrency(item.product.price)}</span>
+                    <span className={`ss-pill ${item.stockAvailable > 0 ? 'ss-pill-success' : 'ss-pill-critical'}`}>
+                      Stok: {item.stockAvailable}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
 
           {errorMsg && (
             <div className="ss-pos-error-banner" role="alert">
@@ -241,7 +358,7 @@ export default function POSInterface({ locations }: POSInterfaceProps) {
               <span className="material-symbols-outlined ss-pos-cart-empty-icon">shopping_cart</span>
               <p className="ss-pos-cart-empty-title">Keranjang Kosong</p>
               <p className="ss-pos-cart-empty-desc">
-                Scan produk untuk menambahkan ke keranjang belanja.
+                Ketik nama produk, SKU, atau scan barcode untuk menambahkan barang.
               </p>
             </div>
           ) : (
@@ -300,7 +417,7 @@ export default function POSInterface({ locations }: POSInterfaceProps) {
         </div>
       </div>
 
-      {/* ── RIGHT: Summary Panel ── */}
+      {/* ── RIGHT: Summary & Cash Payment Calculator ── */}
       <div className="ss-pos-right">
         {/* Header */}
         <div className="ss-pos-summary-header">
@@ -330,6 +447,79 @@ export default function POSInterface({ locations }: POSInterfaceProps) {
             <span className="ss-pos-total-label">Total Bayar</span>
             <span className="ss-pos-total-value">{formatCurrency(totalAmount)}</span>
           </div>
+
+          {/* ── Cash Payment & Change Section ── */}
+          <div className="ss-pos-cash-section">
+            <label className="ss-pos-cash-label" htmlFor="cash-given-input">
+              Uang Dibayar (Tunai)
+            </label>
+            <div className="ss-pos-cash-input-wrap">
+              <span className="ss-pos-cash-currency">Rp</span>
+              <input
+                id="cash-given-input"
+                type="number"
+                min="0"
+                step="500"
+                placeholder="0"
+                value={cashInput}
+                onChange={(e) => setCashInput(e.target.value)}
+                className="ss-pos-cash-input"
+              />
+            </div>
+
+            {/* Shortcuts */}
+            <div className="ss-pos-cash-shortcuts">
+              <button
+                type="button"
+                className="ss-pos-cash-btn ss-pos-cash-btn--pas"
+                onClick={() => handleShortcutCash(totalAmount)}
+              >
+                Uang Pas
+              </button>
+              <button
+                type="button"
+                className="ss-pos-cash-btn"
+                onClick={() => handleShortcutCash(20000)}
+              >
+                20rb
+              </button>
+              <button
+                type="button"
+                className="ss-pos-cash-btn"
+                onClick={() => handleShortcutCash(50000)}
+              >
+                50rb
+              </button>
+              <button
+                type="button"
+                className="ss-pos-cash-btn"
+                onClick={() => handleShortcutCash(100000)}
+              >
+                100rb
+              </button>
+              <button
+                type="button"
+                className="ss-pos-cash-btn"
+                onClick={() => handleShortcutCash(200000)}
+              >
+                200rb
+              </button>
+            </div>
+
+            {/* Change Box */}
+            <div className={`ss-pos-change-box ${isCashInsufficient ? 'ss-pos-change-box--invalid' : 'ss-pos-change-box--valid'}`}>
+              <span className="ss-pos-change-label">KEMBALIAN</span>
+              {isCashInsufficient ? (
+                <span className="ss-pos-change-value ss-pos-change-value--invalid">
+                  Uang kurang {formatCurrency(totalAmount - cashGiven)}
+                </span>
+              ) : (
+                <span className="ss-pos-change-value">
+                  {formatCurrency(changeGiven)}
+                </span>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* CTA */}
@@ -337,7 +527,7 @@ export default function POSInterface({ locations }: POSInterfaceProps) {
           <button
             id="btn-bayar-sekarang"
             onClick={handleCheckout}
-            disabled={cart.length === 0 || isCheckout}
+            disabled={!isPaymentValid || isCheckout}
             className="ss-pos-checkout-btn"
             type="button"
           >
